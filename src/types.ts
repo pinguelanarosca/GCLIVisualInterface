@@ -10,6 +10,7 @@ export interface CliStatus {
   cliPath: string;
   connectionState: 'connected' | 'error' | 'not_detected';
   authConfigured: boolean;
+  maskedApiKey?: string;
   apiValid?: boolean;
   apiChecked?: boolean;
   apiError?: string;

@@ -81,25 +81,28 @@ export function App() {
   const [currentlyNarratingId, setCurrentlyNarratingId] = useState<string | null>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Initial Data Fetching
-  const refreshStatus = async () => {
+  // Initial Data Fetching & Sync
+  const refreshStatus = async (forceFresh = true) => {
     setIsCheckingStatus(true);
     try {
-      const res = await fetch('/api/status');
-      if (res.ok) {
+      const res = await fetch(`/api/status?fresh=${forceFresh ? 'true' : 'false'}`);
+      const contentType = res.headers.get('content-type');
+      if (res.ok && contentType && contentType.includes('application/json')) {
         const data = await res.json();
         setCliStatus(data);
         if (data.approvalMode) setApprovalMode(data.approvalMode);
+      } else if (!res.ok) {
+        console.warn(`Status check failed with status ${res.status}`);
       }
     } catch (err) {
-      console.error('Failed to get CLI status:', err);
+      console.warn('Failed to get CLI status (network or parsing):', err);
     } finally {
       setIsCheckingStatus(false);
     }
   };
 
   const loadAllData = async () => {
-    await refreshStatus();
+    await refreshStatus(false);
 
     try {
       // Projects
@@ -160,6 +163,15 @@ export function App() {
 
   useEffect(() => {
     loadAllData();
+
+    // Auto-sync status periodically every 2 minutes
+    const interval = setInterval(() => {
+      refreshStatus(false);
+    }, 120000);
+
+    return () => {
+      clearInterval(interval);
+    };
   }, []);
 
   // Theme change

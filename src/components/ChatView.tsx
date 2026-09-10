@@ -257,7 +257,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <Bot className="w-7 h-7" />
             </div>
             <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
-              Gemini CLI {cliStatus?.version || '0.59.0'} Workspace
+              Gemini CLI {cliStatus?.version || '...'} Workspace
             </h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1.5 leading-relaxed">
               Interface local operando diretamente o processo real do Gemini CLI. Digite uma instrução, utilize um

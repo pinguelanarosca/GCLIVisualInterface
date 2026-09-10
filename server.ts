@@ -105,12 +105,15 @@ async function startServer() {
 
   // 1. Status & CLI Information
   app.get('/api/status', async (req, res) => {
-    const status = await detectCliStatus();
+    const forceFresh = req.query.fresh === 'true' || req.query.fresh === '1';
+    const model = typeof req.query.model === 'string' && req.query.model.trim() ? req.query.model.trim() : 'gemini-3.1-flash-lite';
+    const status = await detectCliStatus(forceFresh, model);
     res.json(status);
   });
 
   app.get('/api/api-key/validate', async (req, res) => {
-    const result = await validateGeminiApiKey(true);
+    const model = typeof req.query.model === 'string' && req.query.model.trim() ? req.query.model.trim() : 'gemini-3.1-flash-lite';
+    const result = await validateGeminiApiKey(true, model);
     res.json(result);
   });
 
@@ -126,12 +129,12 @@ async function startServer() {
     try {
       const execAsync = promisify(exec);
       // Remove and install fresh latest version of @google/gemini-cli
-      const { stdout, stderr } = await execAsync('npm install @google/gemini-cli@latest', {
+      const { stdout, stderr } = await execAsync('npm install @google/gemini-cli@latest --no-audit --no-fund', {
         cwd: process.cwd(),
         timeout: 120000,
       });
 
-      const newStatus = await detectCliStatus();
+      const newStatus = await detectCliStatus(true);
       res.json({
         success: true,
         version: newStatus.version,
@@ -141,6 +144,7 @@ async function startServer() {
         message: `Gemini CLI atualizado com sucesso para a versão ${newStatus.version}!`,
       });
     } catch (err: any) {
+      console.error('Falha ao atualizar o CLI:', err);
       res.status(500).json({
         success: false,
         error: err.message || 'Falha ao atualizar o Gemini CLI',

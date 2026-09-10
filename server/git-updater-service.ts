@@ -5,7 +5,7 @@ import { GitAppStatus, GitCommitInfo, GitUpdateCheckResult, GitUpdateResult } fr
 import { sysLog } from './logger-service.js';
 
 export const DEFAULT_GIT_REPO_URL = 'https://github.com/pinguelanarosca/GCLIVisualInterface';
-export const DEFAULT_GIT_BRANCH = 'main';
+export const DEFAULT_GIT_BRANCH = 'Update';
 
 function getGitVersion(): string | undefined {
   try {

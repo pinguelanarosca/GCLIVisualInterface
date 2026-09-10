@@ -93,6 +93,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // API Live Validation state
   const [isValidatingApi, setIsValidatingApi] = useState(false);
+  const [validationModel, setValidationModel] = useState<string>('gemini-3.1-flash-lite');
   const [apiValidationResult, setApiValidationResult] = useState<{
     success: boolean;
     message: string;
@@ -104,16 +105,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsValidatingApi(true);
     setApiValidationResult(null);
     try {
-      const res = await fetch('/api/api-key/validate');
-      const data = await res.json();
-      setApiValidationResult({
-        success: Boolean(data.valid),
-        message: data.message || (data.valid ? 'Conexão com a API validada com sucesso!' : 'Falha na validação com a API'),
-        latencyMs: data.latencyMs,
-        modelTested: data.modelTested,
-      });
-      if (onRefreshStatus) {
-        onRefreshStatus();
+      const res = await fetch(`/api/api-key/validate?model=${encodeURIComponent(validationModel)}`);
+      const contentType = res.headers.get('content-type');
+      if (res.ok && contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        setApiValidationResult({
+          success: Boolean(data.valid),
+          message: data.message || (data.valid ? 'Conexão com a API validada com sucesso!' : 'Falha na validação com a API'),
+          latencyMs: data.latencyMs,
+          modelTested: data.modelTested,
+        });
+        if (onRefreshStatus) {
+          onRefreshStatus();
+        }
+      } else {
+        setApiValidationResult({
+          success: false,
+          message: `Falha na requisição: ${res.status}`,
+        });
       }
     } catch (err: any) {
       setApiValidationResult({
@@ -160,20 +169,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setUpdateCliResult(null);
     try {
       const res = await fetch('/api/cli/update', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setUpdateCliResult({
-          success: true,
-          message: data.message || `Gemini CLI atualizado com sucesso para v${data.version}!`,
-          version: data.version,
-        });
-        if (onRefreshStatus) {
-          onRefreshStatus();
+      const contentType = res.headers.get('content-type');
+      if (res.ok && contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.success) {
+          setUpdateCliResult({
+            success: true,
+            message: data.message || `Gemini CLI atualizado com sucesso para v${data.version}!`,
+            version: data.version,
+          });
+          if (onRefreshStatus) {
+            onRefreshStatus();
+          }
+        } else {
+          setUpdateCliResult({
+            success: false,
+            message: data.error || 'Falha ao atualizar o Gemini CLI',
+          });
         }
       } else {
         setUpdateCliResult({
           success: false,
-          message: data.error || 'Falha ao atualizar o Gemini CLI',
+          message: `O servidor retornou um erro HTTP ${res.status}. Tente novamente.`,
         });
       }
     } catch (err: any) {
@@ -323,7 +340,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex justify-between items-center">
                     <span className="text-zinc-500">Versão Detectada:</span>
                     <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">
-                      {cliStatus?.version || '0.59.0'}
+                      {cliStatus?.version || 'Detectando...'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -384,6 +401,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         process.env.GEMINI_API_KEY
                       </span>
                     </div>
+                    {cliStatus?.maskedApiKey && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-zinc-500 dark:text-zinc-400">Chave Lida:</span>
+                        <span className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300 font-semibold bg-zinc-200/50 dark:bg-zinc-900/50 px-1.5 py-0.5 rounded">
+                          {cliStatus.maskedApiKey}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center">
                       <span className="text-zinc-500 dark:text-zinc-400">Status Operacional:</span>
                       <span className="font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">

@@ -35,7 +35,7 @@ interface GitUpdaterViewProps {
 
 export const GitUpdaterView: React.FC<GitUpdaterViewProps> = ({ onRefreshGlobalStatus }) => {
   const [repoUrl, setRepoUrl] = useState('https://github.com/pinguelanarosca/GCLIVisualInterface');
-  const [branch, setBranch] = useState('main');
+  const [branch, setBranch] = useState('Update');
   const [gitStatus, setGitStatus] = useState<GitAppStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
 
@@ -169,16 +169,36 @@ export const GitUpdaterView: React.FC<GitUpdaterViewProps> = ({ onRefreshGlobalS
           restartServer: autoRestart,
         }),
       });
-      const data = await res.json();
-      setUpdateResult(data);
+      const contentType = res.headers.get('content-type');
+      if (res.ok && contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        setUpdateResult(data);
 
-      if (data.success) {
-        await loadStatus();
-        if (onRefreshGlobalStatus) {
-          onRefreshGlobalStatus();
+        if (data.success) {
+          await loadStatus();
+          if (onRefreshGlobalStatus) {
+            onRefreshGlobalStatus();
+          }
+          if (data.restarting || autoRestart) {
+            startHealthPolling(4);
+          }
         }
-        if (data.restarting || autoRestart) {
+      } else {
+        // If the server restarted during the request, it might return 502/503 HTML
+        const isRebooting = autoRestart || runBuild;
+        if (isRebooting && !res.ok) {
+          setUpdateResult({
+            success: true,
+            message: 'A atualização foi iniciada e o servidor está reiniciando em segundo plano.',
+            logs: [`Processo de atualização finalizado. Reinicialização iniciada...`],
+          });
           startHealthPolling(4);
+        } else {
+          setUpdateResult({
+            success: false,
+            message: `Erro HTTP ${res.status}. Tente novamente.`,
+            logs: [`O servidor retornou um status inesperado: ${res.status}`],
+          });
         }
       }
     } catch (err: any) {
@@ -236,8 +256,8 @@ export const GitUpdaterView: React.FC<GitUpdaterViewProps> = ({ onRefreshGlobalS
 cd /opt/gemini-gui || cd ~/GCLIVisualInterface || cd ~/gemini-cli-gui
 
 # 2. Sincronizar o código com o repositório remoto:
-git fetch origin ${branch || 'main'}
-git reset --hard origin/${branch || 'main'}
+git fetch origin ${branch || 'Update'}
+git reset --hard origin/${branch || 'Update'}
 
 # 3. Atualizar dependências e recompilar a aplicação:
 npm install
@@ -334,7 +354,7 @@ npm start
               type="text"
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
-              placeholder="main"
+              placeholder="Update"
               className="w-full px-3 py-2 text-xs font-mono rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 outline-none focus:border-blue-500 transition"
             />
           </div>
@@ -679,7 +699,7 @@ npm start
 
         <div className="p-3 rounded-lg bg-zinc-900 text-zinc-200 font-mono text-[11px] overflow-x-auto space-y-1 select-all">
           <p className="text-zinc-500"># 1. Sincronizar código do repositório:</p>
-          <p className="text-blue-400">git fetch origin {branch || 'main'} && git reset --hard origin/{branch || 'main'}</p>
+          <p className="text-blue-400">git fetch origin {branch || 'Update'} && git reset --hard origin/{branch || 'Update'}</p>
           <p className="text-zinc-500 pt-1"># 2. Instalar dependências e compilar frontend/backend:</p>
           <p className="text-emerald-400">npm install && npm run build</p>
           <p className="text-zinc-500 pt-1"># 3. Reiniciar a aplicação:</p>

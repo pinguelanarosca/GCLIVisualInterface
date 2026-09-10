@@ -11,6 +11,7 @@ let currentCustomCliPath: string = '';
 
 let lastValidationCache: {
   timestamp: number;
+  model: string;
   result: {
     configured: boolean;
     valid: boolean;
@@ -20,7 +21,10 @@ let lastValidationCache: {
   };
 } | null = null;
 
-export async function validateGeminiApiKey(forceFresh = false): Promise<{
+export async function validateGeminiApiKey(
+  forceFresh = false,
+  targetModel = 'gemini-3.1-flash-lite'
+): Promise<{
   configured: boolean;
   valid: boolean;
   message: string;
@@ -36,9 +40,14 @@ export async function validateGeminiApiKey(forceFresh = false): Promise<{
     };
   }
 
-  // Use 30-second cache unless forced
+  // Use 30-second cache unless forced or model changed
   const now = Date.now();
-  if (!forceFresh && lastValidationCache && (now - lastValidationCache.timestamp < 30000)) {
+  if (
+    !forceFresh &&
+    lastValidationCache &&
+    lastValidationCache.model === targetModel &&
+    now - lastValidationCache.timestamp < 30000
+  ) {
     return lastValidationCache.result;
   }
 
@@ -53,9 +62,9 @@ export async function validateGeminiApiKey(forceFresh = false): Promise<{
       },
     });
 
-    // Real ping call to verify key authenticity and operational state
+    const pingModel = targetModel;
     await ai.models.generateContent({
-      model: 'gemini-flash-latest',
+      model: pingModel,
       contents: 'ping',
       config: {
         maxOutputTokens: 2,
@@ -67,11 +76,11 @@ export async function validateGeminiApiKey(forceFresh = false): Promise<{
     const res = {
       configured: true,
       valid: true,
-      message: 'Chave GEMINI_API_KEY ativa e validada com sucesso no Google Gemini API.',
-      modelTested: 'gemini-flash-latest',
+      message: `Chave GEMINI_API_KEY ativa e validada com sucesso no Google Gemini API (${targetModel}).`,
+      modelTested: targetModel,
       latencyMs,
     };
-    lastValidationCache = { timestamp: now, result: res };
+    lastValidationCache = { timestamp: now, model: targetModel, result: res };
     sysLog.success('API', `Validação da GEMINI_API_KEY bem-sucedida (${latencyMs}ms)`, { model: res.modelTested });
     return res;
   } catch (err: any) {
@@ -80,11 +89,12 @@ export async function validateGeminiApiKey(forceFresh = false): Promise<{
     const res = {
       configured: true,
       valid: false,
-      message: `Chave presente no ambiente, mas a validação com a API retornou: ${errMsg}`,
+      message: `Chave presente no ambiente, mas a validação com a API (${targetModel}) retornou: ${errMsg}`,
+      modelTested: targetModel,
       latencyMs,
     };
-    lastValidationCache = { timestamp: now, result: res };
-    sysLog.warn('API', `Validação da GEMINI_API_KEY retornou aviso/erro: ${errMsg}`, { latencyMs });
+    lastValidationCache = { timestamp: now, model: targetModel, result: res };
+    sysLog.warn('API', `Validação da GEMINI_API_KEY retornou aviso/erro (${targetModel}): ${errMsg}`, { latencyMs });
     return res;
   }
 }
@@ -149,10 +159,22 @@ export function setCustomCliPath(newPath: string) {
   currentCustomCliPath = newPath;
 }
 
-export async function detectCliStatus(): Promise<CliStatus> {
+export async function detectCliStatus(
+  forceFresh = false,
+  targetModel = 'gemini-3.1-flash-lite'
+): Promise<CliStatus> {
   const cliPath = getResolvedCliPath();
-  const authConfigured = Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY);
-  const apiCheck = authConfigured ? await validateGeminiApiKey() : {
+  const rawApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY || '';
+  const authConfigured = Boolean(rawApiKey);
+  let maskedApiKey = undefined;
+  if (rawApiKey) {
+    if (rawApiKey.length > 8) {
+      maskedApiKey = `${rawApiKey.substring(0, 4)}...${rawApiKey.substring(rawApiKey.length - 4)}`;
+    } else {
+      maskedApiKey = '***';
+    }
+  }
+  const apiCheck = authConfigured ? await validateGeminiApiKey(forceFresh, targetModel) : {
     configured: false,
     valid: false,
     message: 'Nenhuma GEMINI_API_KEY configurada no ambiente.',
@@ -182,6 +204,7 @@ export async function detectCliStatus(): Promise<CliStatus> {
           cliPath,
           connectionState: 'not_detected',
           authConfigured,
+          maskedApiKey,
           apiValid: apiCheck.valid,
           apiChecked: true,
           apiError: !apiCheck.valid ? apiCheck.message : undefined,
@@ -200,6 +223,7 @@ export async function detectCliStatus(): Promise<CliStatus> {
             cliPath,
             connectionState: 'connected',
             authConfigured,
+            maskedApiKey,
             apiValid: apiCheck.valid,
             apiChecked: true,
             apiError: !apiCheck.valid ? apiCheck.message : undefined,
@@ -215,6 +239,7 @@ export async function detectCliStatus(): Promise<CliStatus> {
             cliPath,
             connectionState: 'error',
             authConfigured,
+            maskedApiKey,
             apiValid: apiCheck.valid,
             apiChecked: true,
             apiError: !apiCheck.valid ? apiCheck.message : undefined,
@@ -232,6 +257,7 @@ export async function detectCliStatus(): Promise<CliStatus> {
         cliPath,
         connectionState: 'error',
         authConfigured,
+        maskedApiKey,
         apiValid: apiCheck.valid,
         apiChecked: true,
         apiError: !apiCheck.valid ? apiCheck.message : undefined,

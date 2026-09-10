@@ -68,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Brand & CLI Status */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-sm shrink-0">
             <Terminal className="w-5 h-5" />
           </div>
           <div>
@@ -77,42 +77,62 @@ export const Header: React.FC<HeaderProps> = ({
                 Gemini CLI GUI
               </span>
               <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
-                {cliStatus?.version ? `v${cliStatus.version}` : 'v0.59.0'}
+                {cliStatus?.version ? `v${cliStatus.version}` : '...'}
               </span>
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span
-                className={`inline-block w-2 h-2 rounded-full ${
-                  !isConnected
-                    ? 'bg-rose-500'
+                className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                  isCheckingStatus
+                    ? 'bg-blue-500 animate-pulse'
                     : !cliStatus?.authConfigured
-                    ? 'bg-amber-500 animate-pulse'
+                    ? 'bg-rose-500'
                     : cliStatus?.apiValid === false
                     ? 'bg-amber-500 animate-pulse'
-                    : 'bg-emerald-500 animate-pulse'
+                    : 'bg-emerald-500 shadow-sm shadow-emerald-500/40'
                 }`}
               />
-              <span className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
-                {!isConnected
-                  ? 'CLI Indisponível'
-                  : !cliStatus?.authConfigured
-                  ? 'CLI Ativo (Sem Chave no Ambiente)'
-                  : cliStatus?.apiValid === false
-                  ? 'CLI Ativo (API Não Validada)'
-                  : 'Motor CLI & API Ativos'}
+              <div
+                className="text-xs text-zinc-600 dark:text-zinc-300 flex items-center gap-1 cursor-pointer hover:underline"
+                onClick={() => onOpenSettings('cli')}
+                title={
+                  cliStatus?.apiError
+                    ? `Erro na API: ${cliStatus.apiError}`
+                    : cliStatus?.apiValid
+                    ? `API conectada com sucesso (${cliStatus.modelTested || 'gemini-3.1-flash-lite'})`
+                    : 'Clique para abrir configurações da API'
+                }
+              >
+                {isCheckingStatus ? (
+                  <span className="text-zinc-400">Sincronizando...</span>
+                ) : !cliStatus?.authConfigured ? (
+                  <span className="text-rose-600 dark:text-rose-400 font-medium">Sem Chave API</span>
+                ) : cliStatus?.apiValid === false ? (
+                  <span className="text-amber-600 dark:text-amber-400 font-medium">
+                    {cliStatus.apiError?.includes('429') || cliStatus.apiError?.includes('quota') || cliStatus.apiError?.includes('RESOURCE_EXHAUSTED')
+                      ? 'API: Cota Excedida (429)'
+                      : 'API com Aviso/Erro'}
+                  </span>
+                ) : (
+                  <span className="text-emerald-700 dark:text-emerald-400 font-medium">
+                    API Ativa
+                  </span>
+                )}
+
                 {cliStatus?.apiValid && cliStatus?.latencyMs !== undefined && (
                   <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-500/10 px-1 py-0.2 rounded ml-0.5">
                     {cliStatus.latencyMs}ms
                   </span>
                 )}
-              </span>
+              </div>
+
               <button
                 onClick={onRefreshStatus}
                 disabled={isCheckingStatus}
-                title="Recarregar status do CLI e validar API"
-                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1 transition cursor-pointer"
+                title="Sincronizar e revalidar conexão com a API Gemini"
+                className="text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 ml-1 transition cursor-pointer p-0.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
               >
-                <RefreshCw className={`w-3 h-3 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${isCheckingStatus ? 'animate-spin text-blue-500' : ''}`} />
               </button>
             </div>
           </div>
