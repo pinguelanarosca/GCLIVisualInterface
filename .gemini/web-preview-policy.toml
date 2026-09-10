@@ -1,0 +1,13 @@
+# Web Preview Environment Policy to allow essential development tools in headless execution.
+# This prevents tools from being blocked by default non-interactive / headless checks.
+
+[[rule]]
+toolName = [
+  "replace",
+  "run_shell_command",
+  "write_file",
+  "activate_skill",
+  "web_fetch"
+]
+decision = "allow"
+priority = 90

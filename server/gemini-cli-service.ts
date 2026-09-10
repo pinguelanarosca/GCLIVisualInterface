@@ -389,6 +389,11 @@ export function executeGeminiCli(params: CliExecutionParams, isRetry = false): {
     '--skip-trust',
   ];
 
+  const customPolicyPath = path.join(process.cwd(), '.gemini', 'web-preview-policy.toml');
+  if (fs.existsSync(customPolicyPath)) {
+    args.push('--policy', customPolicyPath);
+  }
+
   // Determine model: respect the configured model for the agent/execution, default to 'gemini-3.5-flash-lite'
   let chosenModel = params.model;
   if (!chosenModel || chosenModel === 'auto') {

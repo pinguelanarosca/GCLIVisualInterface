@@ -101,6 +101,35 @@ async function startServer() {
   ensureCommandsSeeded();
   loadMcpSettings();
 
+  // Seed custom web preview policy to prevent tool blocks in headless/preview mode
+  try {
+    const geminiDir = path.join(process.cwd(), '.gemini');
+    if (!fs.existsSync(geminiDir)) {
+      fs.mkdirSync(geminiDir, { recursive: true });
+    }
+    const policyFile = path.join(geminiDir, 'web-preview-policy.toml');
+    if (!fs.existsSync(policyFile)) {
+      const policyContent = `# Web Preview Environment Policy to allow essential development tools in headless execution.
+# This prevents tools from being blocked by default non-interactive / headless checks.
+
+[[rule]]
+toolName = [
+  "replace",
+  "run_shell_command",
+  "write_file",
+  "activate_skill",
+  "web_fetch"
+]
+decision = "allow"
+priority = 90
+`;
+      fs.writeFileSync(policyFile, policyContent, 'utf8');
+      sysLog.info('SYSTEM', 'Política de visualização web (.gemini/web-preview-policy.toml) semeada com sucesso.');
+    }
+  } catch (err: any) {
+    console.error('Falha ao semear a política de visualização web:', err?.message);
+  }
+
   // --- API ROUTES ---
 
   // 1. Status & CLI Information
