@@ -367,7 +367,7 @@ export interface CliExecutionParams {
 }
 
 export function executeGeminiCli(params: CliExecutionParams, isRetry = false): { cancel: () => void } {
-  const cliPath = getResolvedCliPath();
+  let cliPath = getResolvedCliPath();
   const args: string[] = [
     '-p', params.prompt,
     '-o', 'stream-json',
@@ -399,7 +399,14 @@ export function executeGeminiCli(params: CliExecutionParams, isRetry = false): {
     }
   }
 
-  const cwd = params.workDir || (params.authorizedDirs && params.authorizedDirs[0]) || process.cwd();
+  let cwd = params.workDir || (params.authorizedDirs && params.authorizedDirs[0]) || process.cwd();
+  if (!cwd || !fs.existsSync(cwd)) {
+    cwd = process.cwd();
+  }
+
+  if (!cliPath || (cliPath !== 'gemini' && !fs.existsSync(cliPath))) {
+    cliPath = getLocalCliPath() || getGlobalCliPath() || 'gemini';
+  }
 
   const env = {
     ...process.env,
@@ -463,8 +470,22 @@ export function executeGeminiCli(params: CliExecutionParams, isRetry = false): {
     params.onEvent({ type: 'stderr_raw', data: { text: raw } });
   });
 
-  child.on('error', (err) => {
+  child.on('error', (err: any) => {
     activeChildProcess = null;
+    const isEnoent = err?.code === 'ENOENT' || err?.errno === -2;
+    const errMsg = isEnoent
+      ? `O executável do Gemini CLI ou o diretório de trabalho não foi encontrado no sistema (Caminho: ${cliPath}).`
+      : (err?.message || 'Erro ao iniciar o processo do Gemini CLI.');
+
+    params.onEvent({
+      type: 'process_error',
+      data: {
+        type: 'process_error',
+        exitCode: err?.errno || -2,
+        stderr: err?.message || '',
+        message: errMsg,
+      },
+    });
     params.onError(err);
   });
 
@@ -518,7 +539,9 @@ export function executeGeminiCli(params: CliExecutionParams, isRetry = false): {
       }
 
       let finalMessage = reportedErrorText || stderrText.trim();
-      if (stderrText.includes('Please set an Auth method') || stderrText.includes('GEMINI_API_KEY')) {
+      if (code === -2 || stderrText.includes('ENOENT')) {
+        finalMessage = `O executável do Gemini CLI (${cliPath}) ou o diretório de trabalho (${cwd}) não foi localizado no sistema (Erro -2 / ENOENT).`;
+      } else if (stderrText.includes('Please set an Auth method') || stderrText.includes('GEMINI_API_KEY')) {
         finalMessage = 'A chave de API do Gemini (GEMINI_API_KEY) não está configurada no seu ambiente. Configure-a no menu de Configurações da GUI ou exporte a variável no terminal.';
       } else if (isQuotaError) {
         const retryMatch = (stderrText + ' ' + reportedErrorText).match(/Please retry in ([0-9.]+s?)/i);
@@ -535,6 +558,7 @@ Você atingiu o limite gratuito de requisições da sua conta para o modelo atua
       params.onEvent({
         type: 'process_error',
         data: {
+          type: 'process_error',
           exitCode: code,
           stderr: stderrText,
           message: finalMessage,

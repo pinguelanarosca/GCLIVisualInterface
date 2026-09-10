@@ -232,7 +232,11 @@ async function startServer() {
       resume: Boolean(resume),
       workDir,
       onEvent: (evt) => {
-        sendSse(evt.type, evt.data);
+        const payload =
+          typeof evt.data === 'object' && evt.data !== null
+            ? { type: evt.type, ...evt.data }
+            : { type: evt.type, data: evt.data };
+        sendSse(evt.type, payload);
       },
       onDone: (exitCode, signal) => {
         sendSse('done', { exitCode, signal });

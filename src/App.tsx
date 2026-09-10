@@ -262,9 +262,13 @@ export function App() {
               const eventPayload = JSON.parse(rawData);
 
               // Inspect Gemini CLI JSON stream event
-              if (eventPayload.type === 'process_error' || eventPayload.type === 'error') {
+              if (
+                eventPayload.type === 'process_error' ||
+                eventPayload.type === 'error' ||
+                (eventPayload.exitCode !== undefined && eventPayload.exitCode !== 0)
+              ) {
                 hasError = true;
-                errorMessage = eventPayload.message || eventPayload.text || errorMessage;
+                errorMessage = eventPayload.message || eventPayload.text || errorMessage || `Código de saída: ${eventPayload.exitCode}`;
               } else if (eventPayload.type === 'result' && eventPayload.status === 'error') {
                 hasError = true;
                 errorMessage = eventPayload.error?.message || errorMessage || 'Erro retornado pela API do Gemini.';
