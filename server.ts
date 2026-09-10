@@ -54,6 +54,14 @@ import {
   DEFAULT_GIT_REPO_URL,
   DEFAULT_GIT_BRANCH,
 } from './server/git-updater-service.js';
+import {
+  sysLog,
+  getLogs,
+  clearLogs,
+  exportLogsText,
+  registerSseClient,
+  addLog,
+} from './server/logger-service.js';
 
 const PORT = 3000;
 
@@ -62,6 +70,28 @@ async function startServer() {
 
   // Generous limit for audio base64 uploads
   app.use(express.json({ limit: '25mb' }));
+
+  // Request logger middleware for API operations
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/') && req.path !== '/api/logs/stream') {
+      const start = Date.now();
+      const originalEnd = res.end;
+      res.end = function (...args: any[]) {
+        const duration = Date.now() - start;
+        const isSpammy = req.path === '/api/logs' && req.method === 'GET';
+        if (!isSpammy) {
+          const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info';
+          sysLog[level](
+            'API',
+            `HTTP ${req.method} ${req.path} -> ${res.statusCode} (${duration}ms)`,
+            { statusCode: res.statusCode, durationMs: duration }
+          );
+        }
+        return originalEnd.apply(res, args);
+      } as any;
+    }
+    next();
+  });
 
   // Seed default agents, skills, commands, MCP
   ensureAgentsSeeded();
@@ -210,17 +240,20 @@ async function startServer() {
       return res.status(400).json({ error: 'Dados do agente inválidos.' });
     }
     saveAgentToFile(agent);
+    sysLog.info('AGENT', `Agente salvo/atualizado: "${agent.displayName || agent.name}" (ID: ${agent.id || agent.name})`, { model: agent.model });
     res.json({ success: true, agents: loadAgents() });
   });
 
   app.delete('/api/agents/:name', (req, res) => {
     const { name } = req.params;
     const ok = deleteAgent(name);
+    sysLog.warn('AGENT', `Agente removido: "${name}"`, { success: ok });
     res.json({ success: ok, agents: loadAgents() });
   });
 
   app.post('/api/agents/reset-defaults', (req, res) => {
     const agents = resetAllAgentsToDefault();
+    sysLog.info('AGENT', 'Todos os agentes foram restaurados para o padrão de fábrica.', { count: agents.length });
     res.json({ success: true, agents });
   });
 
@@ -236,12 +269,14 @@ async function startServer() {
       return res.status(400).json({ error: 'Dados da skill inválidos.' });
     }
     saveSkillToFile(skill);
+    sysLog.info('SKILL', `Skill salva/atualizada: "${skill.name}"`);
     res.json({ success: true, skills: loadSkills() });
   });
 
   app.delete('/api/skills/:name', (req, res) => {
     const { name } = req.params;
     const ok = deleteSkill(name);
+    sysLog.warn('SKILL', `Skill removida: "${name}"`, { success: ok });
     res.json({ success: ok, skills: loadSkills() });
   });
 
@@ -257,12 +292,14 @@ async function startServer() {
       return res.status(400).json({ error: 'Dados do comando inválidos.' });
     }
     saveCommandToFile(cmd);
+    sysLog.info('COMMAND', `Comando salvo/atualizado: "${cmd.name}"`);
     res.json({ success: true, commands: loadCommands() });
   });
 
   app.delete('/api/commands/:name', (req, res) => {
     const { name } = req.params;
     const ok = deleteCommand(name);
+    sysLog.warn('COMMAND', `Comando removido: "${name}"`, { success: ok });
     res.json({ success: ok, commands: loadCommands() });
   });
 
@@ -278,6 +315,7 @@ async function startServer() {
       return res.status(400).json({ error: 'Lista esperada de servidores MCP.' });
     }
     saveMcpSettings(servers);
+    sysLog.info('MCP', `Configurações de servidores MCP atualizadas (${servers.length} servidores configurados).`);
     res.json({ success: true, servers: loadMcpSettings() });
   });
 
@@ -287,6 +325,11 @@ async function startServer() {
       return res.status(400).json({ success: false, message: 'Configuração MCP inválida.' });
     }
     const result = await testMcpServer(mcp);
+    if (result.success) {
+      sysLog.success('MCP', `Teste do servidor MCP "${mcp.name}": Conexão estabelecida com sucesso.`, { message: result.message });
+    } else {
+      sysLog.warn('MCP', `Teste do servidor MCP "${mcp.name}": Falha na conexão - ${result.message}`);
+    }
     res.json(result);
   });
 
@@ -432,6 +475,50 @@ async function startServer() {
       (branch as string) || DEFAULT_GIT_BRANCH
     );
     res.json({ commands: cmds });
+  });
+
+  // 14. Real-time System Logs
+  app.get('/api/logs', (req, res) => {
+    const { limit, level, category, search } = req.query;
+    const list = getLogs({
+      limit: limit ? Number(limit) : 500,
+      level: level as string,
+      category: category as string,
+      search: search as string,
+    });
+    res.json({ logs: list, total: list.length });
+  });
+
+  app.post('/api/logs', (req, res) => {
+    const { level, category, message, details, source } = req.body || {};
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Mensagem de log é obrigatória.' });
+    }
+    const entry = addLog(
+      level || 'info',
+      category || 'SYSTEM',
+      message,
+      details,
+      source || 'Frontend'
+    );
+    res.json({ success: true, log: entry });
+  });
+
+  app.delete('/api/logs', (req, res) => {
+    clearLogs();
+    res.json({ success: true, message: 'Logs limpos com sucesso.' });
+  });
+
+  app.get('/api/logs/stream', (req, res) => {
+    registerSseClient(res);
+  });
+
+  app.get('/api/logs/export', (req, res) => {
+    const text = exportLogsText();
+    const filename = `gemini_gui_logs_${new Date().toISOString().replace(/[:.]/g, '-')}.log`;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(text);
   });
 
   // --- Vite middleware / static files ---

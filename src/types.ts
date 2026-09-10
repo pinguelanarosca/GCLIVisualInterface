@@ -235,3 +235,30 @@ export interface GitUpdateResult {
   error?: string;
 }
 
+export type SystemLogLevel = 'info' | 'success' | 'warn' | 'error' | 'debug';
+export type SystemLogCategory =
+  | 'CLI'
+  | 'SERVER'
+  | 'API'
+  | 'GIT'
+  | 'AGENT'
+  | 'SKILL'
+  | 'COMMAND'
+  | 'MCP'
+  | 'AUDIO'
+  | 'PACKAGE'
+  | 'CONFIG'
+  | 'AUTH'
+  | 'SYSTEM';
+
+export interface SystemLogEntry {
+  id: string;
+  timestamp: string; // ISO 8601
+  formattedDateTime: string; // e.g., '10/09/2026 14:52:30.123'
+  level: SystemLogLevel;
+  category: SystemLogCategory;
+  message: string;
+  source?: string;
+  details?: Record<string, any> | string;
+}
+

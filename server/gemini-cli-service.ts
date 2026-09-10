@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { GoogleGenAI } from '@google/genai';
 import { CliStatus } from '../src/types.js';
+import { sysLog } from './logger-service.js';
 
 let activeChildProcess: ChildProcess | null = null;
 let currentCustomCliPath: string = '';
@@ -71,6 +72,7 @@ export async function validateGeminiApiKey(forceFresh = false): Promise<{
       latencyMs,
     };
     lastValidationCache = { timestamp: now, result: res };
+    sysLog.success('API', `Validação da GEMINI_API_KEY bem-sucedida (${latencyMs}ms)`, { model: res.modelTested });
     return res;
   } catch (err: any) {
     const latencyMs = Date.now() - startTime;
@@ -82,6 +84,7 @@ export async function validateGeminiApiKey(forceFresh = false): Promise<{
       latencyMs,
     };
     lastValidationCache = { timestamp: now, result: res };
+    sysLog.warn('API', `Validação da GEMINI_API_KEY retornou aviso/erro: ${errMsg}`, { latencyMs });
     return res;
   }
 }
@@ -303,6 +306,11 @@ export function executeGeminiCli(params: CliExecutionParams, isRetry = false): {
   });
 
   activeChildProcess = child;
+  sysLog.info(
+    'CLI',
+    `Iniciando execução Gemini CLI [Modelo: ${chosenModel}] (Prompt: "${params.prompt.substring(0, 50)}${params.prompt.length > 50 ? '...' : ''}")`,
+    { model: chosenModel, sessionId: params.sessionId, approvalMode: params.approvalMode, cwd }
+  );
 
   let buffer = '';
   let stderrText = '';
@@ -423,6 +431,9 @@ Você atingiu o limite gratuito de requisições da sua conta para o modelo atua
           message: finalMessage,
         },
       });
+      sysLog.error('CLI', `Gemini CLI finalizado com erro (código: ${code}): ${finalMessage.substring(0, 100)}`, { exitCode: code, stderr: stderrText.substring(0, 200) });
+    } else {
+      sysLog.success('CLI', `Execução do Gemini CLI concluída com sucesso (código 0).`, { sessionId: params.sessionId });
     }
 
     activeChildProcess = null;
@@ -432,6 +443,7 @@ Você atingiu o limite gratuito de requisições da sua conta para o modelo atua
   return {
     cancel: () => {
       if (child && !child.killed) {
+        sysLog.warn('CLI', 'Execução cancelada via sinal SIGINT.');
         child.kill('SIGINT');
       }
     },
@@ -440,6 +452,7 @@ Você atingiu o limite gratuito de requisições da sua conta para o modelo atua
 
 export function cancelActiveExecution(): boolean {
   if (activeChildProcess && !activeChildProcess.killed) {
+    sysLog.warn('CLI', 'Execução ativa do Gemini CLI cancelada pelo usuário.');
     activeChildProcess.kill('SIGINT');
     activeChildProcess = null;
     return true;

@@ -1,4 +1,5 @@
 import { GoogleGenAI, Modality } from '@google/genai';
+import { sysLog } from './logger-service.js';
 
 let geminiClient: GoogleGenAI | null = null;
 
@@ -86,8 +87,10 @@ export async function transcribeAudio(base64Data: string, mimeType: string = 'au
     });
 
     const text = response.text?.trim() || '';
+    sysLog.success('AUDIO', `Transcrição de áudio concluída (${text.length} caracteres).`, { length: text.length });
     return { text };
   } catch (err: any) {
+    sysLog.error('AUDIO', `Falha na transcrição de áudio: ${err.message || String(err)}`);
     return {
       text: '',
       error: `Erro no modelo gemini-3.5-transcribe: ${err.message || String(err)}`,
@@ -129,8 +132,10 @@ export async function synthesizeSpeech(text: string, voiceName: string = 'Kore')
       return { audioBase64: '', error: 'O modelo não retornou dados de áudio sintetizado.' };
     }
 
+    sysLog.success('AUDIO', `Síntese de fala TTS gerada com sucesso [Voz: ${chosenVoice}].`, { voice: chosenVoice });
     return { audioBase64 };
   } catch (err: any) {
+    sysLog.error('AUDIO', `Falha na síntese de voz TTS: ${err.message || String(err)}`);
     return {
       audioBase64: '',
       error: `Erro no modelo gemini-3.1-flash-tts-preview: ${err.message || String(err)}`,

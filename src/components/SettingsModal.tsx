@@ -26,6 +26,7 @@ import {
   Copy,
   GitPullRequest,
   GitBranch,
+  Activity,
 } from 'lucide-react';
 import {
   CliStatus,
@@ -39,6 +40,7 @@ import {
 import { ModelSelectorModal } from './ModelSelectorModal.js';
 import { ModelCatalogView } from './ModelCatalogView.js';
 import { GitUpdaterView } from './GitUpdaterView.js';
+import { RealtimeLogsView } from './RealtimeLogsView.js';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -282,6 +284,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               { id: 'audio', label: 'Áudio STT / TTS', icon: Volume2 },
               { id: 'packaging', label: 'Empacotamento & Status', icon: Package },
               { id: 'git_update', label: 'Atualização (Git)', icon: GitPullRequest },
+              { id: 'logs', label: 'Logs em Tempo Real', icon: Activity },
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -1331,6 +1334,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* 11. ATUALIZAÇÃO DO APLICATIVO VIA GIT */}
             {activeTab === 'git_update' && (
               <GitUpdaterView onRefreshGlobalStatus={onRefreshStatus} />
+            )}
+
+            {/* 12. LOGS DO SISTEMA EM TEMPO REAL */}
+            {activeTab === 'logs' && (
+              <RealtimeLogsView />
             )}
           </div>
         </div>

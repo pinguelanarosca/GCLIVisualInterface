@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
+  Activity,
 } from 'lucide-react';
 import { CliStatus, ProjectItem, AgentConfig } from '../types.js';
 import { DEFAULT_AGENTS } from '../constants/defaultAgents.js';
@@ -196,6 +197,15 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <FolderCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
           <span>Diretórios</span>
+        </button>
+
+        <button
+          onClick={() => onOpenSettings('logs')}
+          title="Ver Logs do Sistema em Tempo Real com Data e Hora"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-emerald-700 dark:text-emerald-400 bg-emerald-50/70 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/40 transition border border-emerald-200/70 dark:border-emerald-800/60"
+        >
+          <Activity className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
+          <span>Logs</span>
         </button>
 
         <button

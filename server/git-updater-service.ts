@@ -2,6 +2,7 @@ import { execSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import { GitAppStatus, GitCommitInfo, GitUpdateCheckResult, GitUpdateResult } from '../src/types.js';
+import { sysLog } from './logger-service.js';
 
 export const DEFAULT_GIT_REPO_URL = 'https://github.com/pinguelanarosca/GCLIVisualInterface';
 export const DEFAULT_GIT_BRANCH = 'main';
@@ -223,6 +224,7 @@ export async function checkRemoteGitUpdates(
   }
 
   if (!remoteCommit) {
+    sysLog.warn('GIT', `Falha ao consultar repositório Git remoto: ${cleanRepoUrl} (${targetBranch})`);
     return {
       hasUpdate: false,
       branch: targetBranch,
@@ -243,6 +245,8 @@ export async function checkRemoteGitUpdates(
   } else {
     message = `A aplicação já está atualizada com o commit mais recente (${remoteCommitShort}) da branch ${targetBranch}.`;
   }
+
+  sysLog.info('GIT', `Verificação de updates Git: ${message}`, { remoteCommit: remoteCommitShort, branch: targetBranch });
 
   return {
     hasUpdate,
@@ -326,6 +330,7 @@ export function performGitUpdate(
     } catch {}
 
     logs.push(`✅ Aplicação sincronizada com sucesso para o commit ${newCommit ? newCommit.substring(0, 7) : 'recente'}!`);
+    sysLog.success('GIT', `Aplicação sincronizada via Git com sucesso para o commit ${newCommit ? newCommit.substring(0, 7) : 'recente'} (${targetBranch})`, { repoUrl: cleanRepoUrl });
 
     return {
       success: true,
@@ -336,6 +341,7 @@ export function performGitUpdate(
     };
   } catch (err: any) {
     logs.push(`❌ Erro no processo de atualização: ${err.message}`);
+    sysLog.error('GIT', `Erro ao atualizar aplicação via Git: ${err.message}`, { repoUrl: cleanRepoUrl, branch: targetBranch });
     return {
       success: false,
       message: `Falha ao atualizar a aplicação via Git: ${err.message}`,
