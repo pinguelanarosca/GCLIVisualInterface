@@ -101,6 +101,9 @@ export function calculateContextBreakdown(
   if (activeProject?.associatedDirs?.length) {
     projectText += `Diretórios do Projeto: ${activeProject.associatedDirs.join(', ')}\n`;
   }
+  if (activeProject?.guidelines) {
+    projectText += `Diretrizes do Projeto (gemini.md):\n${activeProject.guidelines}\n`;
+  }
   if (authorizedDirs?.length) {
     projectText += `Diretórios Autorizados: ${authorizedDirs.map((d) => d.path).join(', ')}\n`;
   }

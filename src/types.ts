@@ -86,6 +86,7 @@ export interface ProjectItem {
   createdAt: string;
   updatedAt: string;
   activeSessionId?: string;
+  guidelines?: string;
 }
 
 export interface AuthorizedDir {
@@ -194,6 +195,10 @@ export interface AudioSettings {
   filterCodeInTts: boolean;
   filterDiffsInTts: boolean;
   micStatus: 'ready' | 'recording' | 'transcribing' | 'error';
+  audioApiKey?: string;
+  audioApiUrl?: string;
+  sttInstructions?: string;
+  ttsInstructions?: string;
   audioModelStatus: {
     sttAvailable: boolean;
     ttsAvailable: boolean;

@@ -480,20 +480,20 @@ priority = 90
   });
 
   app.post('/api/audio/stt', async (req, res) => {
-    const { audioBase64, mimeType } = req.body;
+    const { audioBase64, mimeType, model, apiKey, apiUrl, instructions } = req.body;
     if (!audioBase64) {
       return res.status(400).json({ error: 'Dados de áudio não fornecidos.' });
     }
-    const result = await transcribeAudio(audioBase64, mimeType);
+    const result = await transcribeAudio(audioBase64, mimeType, model, apiKey, apiUrl, instructions);
     res.json(result);
   });
 
   app.post('/api/audio/tts', async (req, res) => {
-    const { text, voice } = req.body;
+    const { text, voice, apiKey, apiUrl, model, instructions } = req.body;
     if (!text) {
       return res.status(400).json({ error: 'Texto para narração é obrigatório.' });
     }
-    const result = await synthesizeSpeech(text, voice);
+    const result = await synthesizeSpeech(text, voice, model, apiKey, apiUrl, instructions);
     res.json(result);
   });
 

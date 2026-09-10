@@ -172,7 +172,7 @@ export function getProjects(): ProjectItem[] {
   return store.projects;
 }
 
-export function createProject(name: string, description: string, associatedDirs?: string[]): ProjectItem {
+export function createProject(name: string, description: string, associatedDirs?: string[], guidelines?: string): ProjectItem {
   const store = loadStore();
   const id = `proj_${Date.now()}`;
   
@@ -195,9 +195,24 @@ export function createProject(name: string, description: string, associatedDirs?
     name: name.trim() || 'Novo Projeto',
     description: description.trim() || '',
     associatedDirs: resolvedDirs.length > 0 ? resolvedDirs : [process.cwd()],
+    guidelines: guidelines || '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+
+  // Sync with physical gemini.md if guidelines provided and directory exists
+  if (project.guidelines && project.associatedDirs.length > 0) {
+    try {
+      const firstDir = project.associatedDirs[0];
+      if (fs.existsSync(firstDir)) {
+        const geminiMdPath = path.join(firstDir, 'gemini.md');
+        fs.writeFileSync(geminiMdPath, project.guidelines);
+        sysLog.info('PROJECT', `Diretrizes salvas em ${geminiMdPath}`);
+      }
+    } catch (err) {
+      sysLog.error('PROJECT', 'Falha ao salvar gemini.md físico', err);
+    }
+  }
 
   store.projects.push(project);
   store.activeProjectId = id;
@@ -233,6 +248,20 @@ export function updateProject(id: string, updates: Partial<ProjectItem>): Projec
     associatedDirs: resolvedDirs,
     updatedAt: new Date().toISOString(),
   };
+
+  // Sync physical gemini.md if guidelines changed
+  if (updates.guidelines !== undefined && store.projects[idx].associatedDirs.length > 0) {
+    try {
+      const firstDir = store.projects[idx].associatedDirs[0];
+      if (fs.existsSync(firstDir)) {
+        const geminiMdPath = path.join(firstDir, 'gemini.md');
+        fs.writeFileSync(geminiMdPath, updates.guidelines || '');
+        sysLog.info('PROJECT', `Diretrizes atualizadas em ${geminiMdPath}`);
+      }
+    } catch (err) {
+      sysLog.error('PROJECT', 'Falha ao atualizar gemini.md físico', err);
+    }
+  }
 
   saveStore(store);
   sysLog.info('PROJECT', `Projeto '${store.projects[idx].name}' atualizado`, { id, dirs: resolvedDirs });

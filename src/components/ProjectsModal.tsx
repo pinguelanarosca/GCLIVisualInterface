@@ -14,6 +14,13 @@ import {
   Sparkles,
   CheckCircle2,
   AlertCircle,
+  Search,
+  ChevronRight,
+  ChevronLeft,
+  History,
+  HardDrive,
+  FileCode2,
+  RefreshCw,
 } from 'lucide-react';
 import { ProjectItem, AuthorizedDir } from '../types.js';
 
@@ -46,12 +53,21 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [newDirs, setNewDirs] = useState<string[]>(['']);
+  const [guidelines, setGuidelines] = useState('');
   
   // Edit mode state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editDirs, setEditDirs] = useState<string[]>([]);
+  const [editGuidelines, setEditGuidelines] = useState('');
+
+  // Directory Selector State
+  const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+  const [selectorTarget, setSelectorTarget] = useState<{ type: 'create' | 'edit'; index: number } | null>(null);
+  const [selectorPath, setSelectorPath] = useState<string>('.');
+  const [selectorEntries, setSelectorEntries] = useState<any[]>([]);
+  const [isLoadingSelector, setIsLoadingSelector] = useState(false);
 
   // Reset states when opened
   useEffect(() => {
@@ -61,10 +77,44 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
       setName('');
       setDescription('');
       setNewDirs(['']);
+      setGuidelines('');
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const loadSelectorEntries = async (path: string) => {
+    setIsLoadingSelector(true);
+    try {
+      const res = await fetch(`/api/files?dir=${encodeURIComponent(path)}`);
+      const data = await res.json();
+      if (data.exists) {
+        setSelectorEntries(data.entries || []);
+        setSelectorPath(data.currentDir);
+      }
+    } catch (err) {
+      console.error('Falha ao carregar diretórios:', err);
+    } finally {
+      setIsLoadingSelector(false);
+    }
+  };
+
+  const openSelector = (type: 'create' | 'edit', index: number, initialPath: string) => {
+    setSelectorTarget({ type, index });
+    setSelectorPath(initialPath || '.');
+    setIsSelectorOpen(true);
+    loadSelectorEntries(initialPath || '.');
+  };
+
+  const handleSelectPath = (path: string) => {
+    if (!selectorTarget) return;
+    if (selectorTarget.type === 'create') {
+      handleUpdateDirInput(selectorTarget.index, path);
+    } else {
+      handleUpdateEditDir(selectorTarget.index, path);
+    }
+    setIsSelectorOpen(false);
+  };
 
   const handleStartCreate = () => {
     setIsCreating(true);
@@ -72,6 +122,7 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
     setName('');
     setDescription('');
     setNewDirs(['']);
+    setGuidelines('');
   };
 
   const handleAddDirInput = () => {
@@ -101,14 +152,17 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
       .map((d) => d.trim())
       .filter((d) => d.length > 0);
 
-    await onCreateProject(
+    // Using any to bypass potential type mismatch if caller isn't updated yet
+    await (onCreateProject as any)(
       name.trim(),
       description.trim(),
-      validDirs
+      validDirs,
+      guidelines.trim()
     );
     setName('');
     setDescription('');
     setNewDirs(['']);
+    setGuidelines('');
     setIsCreating(false);
   };
 
@@ -118,6 +172,7 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
     setEditName(proj.name);
     setEditDescription(proj.description || '');
     setEditDirs(proj.associatedDirs && proj.associatedDirs.length > 0 ? [...proj.associatedDirs] : ['']);
+    setEditGuidelines(proj.guidelines || '');
   };
 
   const handleAddEditDir = () => {
@@ -149,6 +204,7 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
       name: editName.trim(),
       description: editDescription.trim(),
       associatedDirs: validDirs,
+      guidelines: editGuidelines.trim(),
     });
     setEditingId(null);
   };
@@ -243,6 +299,25 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
                 />
               </div>
 
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <FileCode2 className="w-3.5 h-3.5 text-blue-500" />
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Diretrizes Particulares (gemini.md)
+                  </label>
+                </div>
+                <textarea
+                  placeholder="Regras específicas, convenções de código e diretrizes que o agente deve seguir apenas para este projeto."
+                  value={guidelines}
+                  onChange={(e) => setGuidelines(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500 font-mono"
+                />
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  Estas instruções serão injetadas como contexto prioritário sempre que o projeto estiver ativo.
+                </p>
+              </div>
+
               {/* Local Directories Input List */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -269,8 +344,16 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
                           placeholder="/caminho/local/do/projeto ou ~/meu-app ou ./src"
                           value={dir}
                           onChange={(e) => handleUpdateDirInput(idx, e.target.value)}
-                          className="w-full pl-8 pr-3 py-2 text-xs font-mono rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
+                          className="w-full pl-8 pr-12 py-2 text-xs font-mono rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
                         />
+                        <button
+                          type="button"
+                          onClick={() => openSelector('create', idx, dir)}
+                          title="Explorar diretórios"
+                          className="absolute right-2 top-1.5 p-1 rounded-md text-zinc-400 hover:text-blue-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                        >
+                          <Search className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       {newDirs.length > 1 && (
                         <button
@@ -382,6 +465,21 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
                       />
                     </div>
 
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <FileCode2 className="w-3.5 h-3.5 text-blue-500" />
+                        <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                          Diretrizes Particulares (gemini.md)
+                        </label>
+                      </div>
+                      <textarea
+                        value={editGuidelines}
+                        onChange={(e) => setEditGuidelines(e.target.value)}
+                        rows={3}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500 font-mono"
+                      />
+                    </div>
+
                     {/* Edit Associated Local Directories */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -408,8 +506,16 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
                                 value={dir}
                                 placeholder="/caminho/local/do/projeto"
                                 onChange={(e) => handleUpdateEditDir(idx, e.target.value)}
-                                className="w-full pl-8 pr-3 py-1.5 text-xs font-mono rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
+                                className="w-full pl-8 pr-12 py-1.5 text-xs font-mono rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
                               />
+                              <button
+                                type="button"
+                                onClick={() => openSelector('edit', idx, dir)}
+                                title="Explorar diretórios"
+                                className="absolute right-2 top-1 p-1 rounded-md text-zinc-400 hover:text-blue-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                              >
+                                <Search className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                             {editDirs.length > 1 && (
                               <button
@@ -568,6 +674,95 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
           </button>
         </div>
       </div>
+      {/* Directory Selector Modal */}
+      {isSelectorOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col h-[500px]">
+            <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/50">
+              <div className="flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-blue-500" />
+                <span className="text-sm font-semibold">Explorador de Diretórios</span>
+              </div>
+              <button
+                onClick={() => setIsSelectorOpen(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-2 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center gap-2">
+              <button
+                onClick={() => loadSelectorEntries(selectorPath + '/..')}
+                className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className="flex-1 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-[11px] font-mono text-zinc-600 dark:text-zinc-300 truncate">
+                {selectorPath}
+              </div>
+              <button
+                onClick={() => handleSelectPath(selectorPath)}
+                className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition"
+              >
+                Selecionar Este
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {isLoadingSelector ? (
+                <div className="flex items-center justify-center h-full text-zinc-400 text-xs gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Carregando diretórios...
+                </div>
+              ) : selectorEntries.filter(e => e.isDirectory).length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-zinc-400 p-8 text-center">
+                  <Folder className="w-10 h-10 mb-2 opacity-20" />
+                  <p className="text-xs">Nenhum subdiretório encontrado aqui.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {selectorEntries
+                    .filter((e) => e.isDirectory)
+                    .map((entry) => (
+                      <button
+                        key={entry.path}
+                        onClick={() => loadSelectorEntries(entry.path)}
+                        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 text-left transition group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Folder className="w-4 h-4 text-blue-500 group-hover:scale-110 transition" />
+                          <div>
+                            <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                              {entry.name}
+                            </span>
+                            <span className="text-[10px] text-zinc-400 block font-mono">
+                              {entry.path}
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-zinc-300 opacity-0 group-hover:opacity-100 transition" />
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 bg-zinc-50 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+              <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                <History className="w-3 h-3" />
+                <span>Clique para navegar, use 'Selecionar Este' para confirmar o caminho.</span>
+              </div>
+              <button
+                onClick={() => setIsSelectorOpen(false)}
+                className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-white dark:hover:bg-zinc-800"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

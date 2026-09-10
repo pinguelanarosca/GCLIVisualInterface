@@ -38,6 +38,7 @@ interface ContextSettingsViewProps {
   onUpdateMessages: (newMessages: ChatMessage[]) => void;
   agent?: AgentConfig | null;
   activeProject?: ProjectItem | null;
+  projects?: ProjectItem[];
   authorizedDirs?: AuthorizedDir[];
   skills?: SkillConfig[];
   mcpServers?: McpConfig[];
@@ -50,6 +51,7 @@ export const ContextSettingsView: React.FC<ContextSettingsViewProps> = ({
   onUpdateMessages,
   agent,
   activeProject,
+  projects = [],
   authorizedDirs,
   skills,
   mcpServers,
@@ -106,6 +108,14 @@ export const ContextSettingsView: React.FC<ContextSettingsViewProps> = ({
       )} tokens salvos).`,
       tokensSaved,
     });
+  };
+
+  const estimateProjectTokens = (proj: ProjectItem) => {
+    const nameT = Math.ceil((proj.name || '').length / 4);
+    const descT = Math.ceil((proj.description || '').length / 4);
+    const dirsT = Math.ceil(((proj.associatedDirs || []).join(', ').length) / 4);
+    const guideT = Math.ceil((proj.guidelines?.length || 0) / 4);
+    return { nameT, descT, dirsT, guideT, total: nameT + descT + dirsT + guideT };
   };
 
   return (
@@ -219,6 +229,65 @@ export const ContextSettingsView: React.FC<ContextSettingsViewProps> = ({
               {formatTokenCount(breakdown.toolsAndMcpTokens)} tokens
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Statistics by Project */}
+      <div className="space-y-4">
+        <h4 className="text-xs font-bold uppercase font-mono tracking-wider text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+          <Layers className="w-4 h-4 text-emerald-500" />
+          Estatísticas de Contexto por Projeto
+        </h4>
+        
+        <div className="grid grid-cols-1 gap-3">
+          {projects.map((proj) => {
+            const stats = estimateProjectTokens(proj);
+            const isActive = activeProject?.id === proj.id;
+            
+            return (
+              <div 
+                key={proj.id} 
+                className={`p-4 rounded-2xl border transition-all ${
+                  isActive 
+                    ? 'bg-emerald-500/5 border-emerald-500/40 shadow-sm' 
+                    : 'bg-zinc-50/50 dark:bg-zinc-800/30 border-zinc-200 dark:border-zinc-800'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{proj.name}</span>
+                    {isActive && (
+                      <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        Ativo
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs font-mono font-bold text-zinc-500">
+                    Total Estimado: {formatTokenCount(stats.total)} tokens
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[10px] font-mono">
+                  <div className="flex flex-col">
+                    <span className="text-zinc-500 uppercase mb-0.5 text-[9px]">Nome/Desc</span>
+                    <span className="text-zinc-800 dark:text-zinc-200">{formatTokenCount(stats.nameT + stats.descT)} tokens</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-zinc-500 uppercase mb-0.5 text-[9px]">Diretórios</span>
+                    <span className="text-zinc-800 dark:text-zinc-200">{formatTokenCount(stats.dirsT)} tokens</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-zinc-500 uppercase mb-0.5 text-[9px]">Guidelines</span>
+                    <span className="text-zinc-800 dark:text-zinc-200">{formatTokenCount(stats.guideT)} tokens</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-zinc-500 uppercase mb-0.5 text-[9px]">Mensagem Média</span>
+                    <span className="text-zinc-800 dark:text-zinc-200">~150 tokens</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

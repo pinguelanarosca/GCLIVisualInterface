@@ -95,15 +95,19 @@ export function App() {
   // Audio Settings & Narration State
   const [audioSettings, setAudioSettings] = useState<AudioSettings>({
     sttEnabled: true,
-    sttModel: 'gemini-3.5-transcribe',
+    sttModel: 'gemini-3.5-flash-lite',
     ttsEnabled: true,
-    ttsModel: 'gemini-3.1-flash-tts-preview',
+    ttsModel: 'gemini-3.5-flash-lite',
     ttsVoice: 'Kore',
     ttsSpeed: 1.0,
     autoPlayTts: false,
     filterCodeInTts: true,
     filterDiffsInTts: true,
     micStatus: 'ready',
+    audioApiKey: '',
+    audioApiUrl: '',
+    sttInstructions: '',
+    ttsInstructions: '',
     audioModelStatus: {
       sttAvailable: true,
       ttsAvailable: true,
@@ -463,11 +467,15 @@ export function App() {
       const title =
         promptText.length > 40 ? promptText.slice(0, 40) + '...' : promptText;
 
+      const existingSess = sessions.find((s) => s.id === currentSessionId);
+      const effectiveProjectId = existingSess !== undefined ? existingSess.projectId : activeProject?.id;
+
       const savedSession: SessionItem = {
         id: currentSessionId,
-        title,
-        projectId: activeProject?.id,
-        createdAt: new Date().toISOString(),
+        title: existingSess?.title || title,
+        projectId: effectiveProjectId,
+        isArchived: existingSess?.isArchived || false,
+        createdAt: existingSess?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         messageCount: finalMsgList.length,
         messages: finalMsgList,
@@ -536,6 +544,10 @@ export function App() {
         body: JSON.stringify({
           audioBase64: base64Audio,
           mimeType: audioBlob.type || 'audio/webm',
+          model: audioSettings.sttModel,
+          apiKey: audioSettings.audioApiKey,
+          apiUrl: audioSettings.audioApiUrl,
+          instructions: audioSettings.sttInstructions,
         }),
       });
 
@@ -577,6 +589,10 @@ export function App() {
         body: JSON.stringify({
           text,
           voice: audioSettings.ttsVoice || 'Kore',
+          apiKey: audioSettings.audioApiKey,
+          apiUrl: audioSettings.audioApiUrl,
+          model: audioSettings.ttsModel,
+          instructions: audioSettings.ttsInstructions,
         }),
       });
 
@@ -627,11 +643,11 @@ export function App() {
   };
 
   // Projects CRUD handlers
-  const handleCreateProject = async (name: string, description: string, dirs: string[]) => {
+  const handleCreateProject = async (name: string, description: string, dirs: string[], guidelines?: string) => {
     const res = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description, associatedDirs: dirs }),
+      body: JSON.stringify({ name, description, associatedDirs: dirs, guidelines }),
     });
     if (res.ok) {
       const newProj = await res.json();
@@ -693,12 +709,22 @@ export function App() {
     if (sess.projectId) {
       const p = projects.find((x) => x.id === sess.projectId);
       if (p) setActiveProject(p);
+    } else {
+      setActiveProject(null);
     }
   };
 
-  const handleNewSession = () => {
+  const handleNewSession = (projectId?: string | null) => {
     setCurrentSessionId(generateSessionId());
     setMessages([]);
+    if (projectId) {
+      const p = projects.find((x) => x.id === projectId);
+      if (p) {
+        setActiveProject(p);
+        return;
+      }
+    }
+    setActiveProject(null);
   };
 
   const handleDeleteSession = async (id: string) => {
@@ -1074,6 +1100,9 @@ export function App() {
         onUpdateContextSettings={(updates) =>
           setContextSettings((prev) => ({ ...prev, ...updates }))
         }
+        projects={projects}
+        theme={theme}
+        onChangeTheme={setTheme}
       />
     </div>
   );
