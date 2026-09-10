@@ -234,7 +234,7 @@ priority = 90
 
   // 2. Real Execution via Server-Sent Events (SSE)
   app.post('/api/cli/execute', (req, res) => {
-    const { prompt, model, approvalMode, authorizedDirs, sessionId, resume, workDir } = req.body;
+    const { prompt, model, approvalMode, authorizedDirs, sessionId, resume, workDir, agentId } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt é obrigatório.' });
@@ -260,6 +260,7 @@ priority = 90
       sessionId,
       resume: Boolean(resume),
       workDir,
+      agentId,
       onEvent: (evt) => {
         const payload =
           typeof evt.data === 'object' && evt.data !== null

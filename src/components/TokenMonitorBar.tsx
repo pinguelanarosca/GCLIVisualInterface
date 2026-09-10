@@ -57,55 +57,55 @@ export const TokenMonitorBar: React.FC<TokenMonitorBarProps> = ({
   );
 
   return (
-    <div className="relative flex items-center gap-1.5">
-      {/* Interactive Token Monitor Widget in Header */}
+    <div className="relative flex items-center gap-2">
+      {/* Interactive Token Monitor Widget */}
       <div
         onClick={() => setIsPopoverOpen(!isPopoverOpen)}
         title="Clique para ver o Monitor de Tokens & Contexto em Tempo Real"
-        className="flex items-center gap-2 bg-gradient-to-r from-amber-500/10 via-blue-500/10 to-indigo-500/10 dark:from-amber-500/20 dark:via-blue-500/20 dark:to-indigo-500/20 hover:bg-amber-500/20 border border-amber-500/30 dark:border-amber-500/40 px-2.5 py-1 rounded-xl cursor-pointer transition shadow-xs group"
+        className="flex items-center gap-3 bg-gradient-to-r from-amber-500/10 via-blue-500/10 to-indigo-500/10 dark:from-amber-500/20 dark:via-blue-500/20 dark:to-indigo-500/20 hover:from-amber-500/15 hover:to-indigo-500/15 border border-amber-500/40 dark:border-amber-500/50 px-3.5 py-1.5 rounded-xl cursor-pointer transition-all duration-200 shadow-md hover:shadow-lg group"
       >
         {/* Active Chat Token Counter */}
-        <div className="flex items-center gap-1">
-          <Zap className={`w-3.5 h-3.5 text-amber-500 ${isStreaming ? 'animate-bounce' : ''}`} />
-          <span className="text-xs font-bold font-mono text-zinc-900 dark:text-zinc-100">
+        <div className="flex items-center gap-1.5">
+          <Zap className={`w-4 h-4 text-amber-500 ${isStreaming ? 'animate-bounce' : ''}`} />
+          <span className="text-sm font-extrabold font-mono text-zinc-900 dark:text-zinc-100 tracking-tight">
             {formatTokenCount(sessionTokens.totalTokens)}
           </span>
-          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium hidden sm:inline">
+          <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-bold hidden sm:inline uppercase tracking-wider">
             tokens
           </span>
         </div>
 
-        <div className="h-3 w-px bg-zinc-300 dark:bg-zinc-700 mx-0.5" />
+        <div className="h-4 w-px bg-zinc-300 dark:bg-zinc-700 mx-0.5" />
 
         {/* Live Metrics: TPM, RPM, RPD */}
-        <div className="flex items-center gap-2 text-[10px] font-mono">
+        <div className="flex items-center gap-2.5 text-[11px] font-mono">
           <span
             title="Tokens por Minuto (TPM) em tempo real no chat ativo"
-            className="flex items-center text-blue-600 dark:text-blue-400 font-semibold"
+            className="flex items-center text-blue-600 dark:text-blue-400 font-bold"
           >
-            <TrendingUp className="w-2.5 h-2.5 mr-0.5" />
+            <TrendingUp className="w-3 h-3 mr-0.5" />
             {formatTokenCount(metrics.tpm)}/m
           </span>
 
           <span
             title="Requisições por Minuto (RPM)"
-            className="flex items-center text-emerald-600 dark:text-emerald-400 font-semibold"
+            className="flex items-center text-emerald-600 dark:text-emerald-400 font-bold"
           >
-            <Activity className="w-2.5 h-2.5 mr-0.5" />
+            <Activity className="w-3 h-3 mr-0.5" />
             {metrics.rpm} RPM
           </span>
 
           <span
             title="Requisições por Dia (RPD)"
-            className="hidden md:flex items-center text-purple-600 dark:text-purple-400 font-semibold"
+            className="hidden md:flex items-center text-purple-600 dark:text-purple-400 font-bold"
           >
-            <Flame className="w-2.5 h-2.5 mr-0.5" />
+            <Flame className="w-3 h-3 mr-0.5" />
             {metrics.rpd} RPD
           </span>
         </div>
 
         {isStreaming && (
-          <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping ml-0.5" />
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping ml-0.5" />
         )}
       </div>
 

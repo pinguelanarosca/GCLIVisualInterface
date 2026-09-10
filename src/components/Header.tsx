@@ -1,22 +1,15 @@
 import React from 'react';
 import {
   Terminal,
-  FolderGit2,
-  FolderCheck,
-  History,
   Settings,
-  Bot,
   Volume2,
   VolumeX,
   Sun,
   Moon,
-  CheckCircle2,
-  AlertCircle,
   RefreshCw,
   Activity,
 } from 'lucide-react';
 import { CliStatus, ProjectItem, AgentConfig, ChatMessage, AuthorizedDir, SkillConfig, McpConfig } from '../types.js';
-import { DEFAULT_AGENTS } from '../constants/defaultAgents.js';
 import { TokenMonitorBar } from './TokenMonitorBar.js';
 
 interface HeaderProps {
@@ -74,10 +67,8 @@ export const Header: React.FC<HeaderProps> = ({
   mcpServers = [],
   metrics = { rpm: 1, tpm: 0, rpd: 1 },
 }) => {
-  const isConnected = cliStatus?.available && cliStatus?.connectionState === 'connected';
-
   return (
-    <header className="h-16 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md px-4 flex items-center justify-between z-20 shrink-0 select-none">
+    <header className="h-16 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md px-4 flex items-center justify-between relative z-20 shrink-0 select-none">
       {/* Brand & CLI Status */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2.5">
@@ -87,7 +78,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm tracking-tight">
-                Gemini CLI GUI
+                GeminiCLI By Satiro
               </span>
               <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
                 {cliStatus?.version ? `v${cliStatus.version}` : '...'}
@@ -133,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
 
                 {cliStatus?.apiValid && cliStatus?.latencyMs !== undefined && (
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-500/10 px-1 py-0.2 rounded ml-0.5">
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-50/10 px-1 py-0.2 rounded ml-0.5">
                     {cliStatus.latencyMs}ms
                   </span>
                 )}
@@ -150,72 +141,16 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Separator */}
-        <div className="h-6 w-px bg-zinc-200 dark:border-zinc-800 mx-2" />
-
-        {/* Project Selector */}
-        <div className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800/80 px-2 py-1 rounded-lg border border-zinc-200/80 dark:border-zinc-700/60">
-          <FolderGit2 className="w-4 h-4 text-blue-500 shrink-0" />
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1">
-              <select
-                value={activeProject?.id || ''}
-                onChange={(e) => {
-                  const p = projects.find((x) => x.id === e.target.value);
-                  if (p) onSelectProject(p);
-                }}
-                className="bg-transparent text-xs font-semibold text-zinc-800 dark:text-zinc-200 outline-none pr-1 cursor-pointer"
-              >
-                {projects.map((proj) => (
-                  <option key={proj.id} value={proj.id} className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
-                    {proj.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <span
-              onClick={onOpenProjectsModal}
-              title={`Diretório do projeto: ${activeProject?.associatedDirs?.[0] || 'Diretório Raiz'}`}
-              className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[150px] cursor-pointer hover:text-blue-500 hover:underline"
-            >
-              {activeProject?.associatedDirs?.[0] || 'Pasta Raiz'}
-            </span>
-          </div>
-          <button
-            onClick={onOpenProjectsModal}
-            title="Gerenciar Projetos e Alterar Diretorios"
-            className="text-[10px] font-medium px-2 py-0.5 rounded bg-zinc-200/60 dark:bg-zinc-700/60 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600 transition"
-          >
-            Editar
-          </button>
-        </div>
-
-        {/* Agent Selector */}
-        <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-800/80 p-1 rounded-lg border border-zinc-200/80 dark:border-zinc-700/60">
-          <Bot className="w-4 h-4 text-blue-500 ml-1.5" />
-          <select
-            value={selectedAgentId}
-            onChange={(e) => onSelectAgent(e.target.value)}
-            className="bg-transparent text-xs font-medium text-zinc-800 dark:text-zinc-200 outline-none pr-2 cursor-pointer"
-          >
-            {(agents && agents.length > 0 ? agents : DEFAULT_AGENTS).map((agent) => (
-              <option key={agent.id} value={agent.id} className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
-                {agent.displayName || agent.name} ({agent.model})
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
-      {/* Center Nav Views & Realtime Token Monitor */}
-      <div className="flex items-center gap-3">
+      {/* Center Nav Views (Perfectly Centered) */}
+      <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center">
         <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/60 p-1 rounded-xl border border-zinc-200 dark:border-zinc-800">
           <button
             onClick={() => onSelectView('chat')}
-            className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
+            className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition ${
               activeView === 'chat'
-                ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm'
+                ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs'
                 : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
             }`}
           >
@@ -223,41 +158,19 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
           <button
             onClick={() => onSelectView('diffs')}
-            className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
+            className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition ${
               activeView === 'diffs'
-                ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm'
+                ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs'
                 : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
             }`}
           >
             Arquivos & Diffs
           </button>
         </div>
-
-        {/* Real-time Token & Rate Limits Monitor for Active Chat */}
-        <TokenMonitorBar
-          messages={messages}
-          isStreaming={isStreaming}
-          agent={agents?.find((a) => a.id === selectedAgentId) || agents?.[0]}
-          activeProject={activeProject}
-          authorizedDirs={authorizedDirs}
-          skills={skills}
-          mcpServers={mcpServers}
-          metrics={metrics}
-          onOpenContextSettings={() => onOpenSettings('context')}
-        />
       </div>
 
       {/* Right Controls */}
       <div className="flex items-center gap-1.5">
-        <button
-          onClick={onOpenDirsModal}
-          title="Diretórios Autorizados"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition border border-zinc-200/60 dark:border-zinc-800"
-        >
-          <FolderCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-          <span>Diretórios</span>
-        </button>
-
         <button
           onClick={() => onOpenSettings('logs')}
           title="Ver Logs do Sistema em Tempo Real com Data e Hora"
@@ -265,15 +178,6 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <Activity className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
           <span>Logs</span>
-        </button>
-
-        <button
-          onClick={onOpenHistory}
-          title="Histórico de Sessões"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition border border-zinc-200/60 dark:border-zinc-800"
-        >
-          <History className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-          <span>Histórico</span>
         </button>
 
         <button

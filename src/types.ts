@@ -146,6 +146,7 @@ export interface SessionItem {
   id: string;
   title: string;
   projectId?: string;
+  isArchived?: boolean;
   createdAt: string;
   updatedAt: string;
   messageCount: number;

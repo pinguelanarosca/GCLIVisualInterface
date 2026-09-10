@@ -178,13 +178,28 @@ export async function checkRemoteGitUpdates(
     }).trim();
 
     const lines = lsOutput.split('\n');
+    let foundSpecific = false;
     for (const line of lines) {
       const parts = line.trim().split(/\s+/);
       if (parts.length >= 2) {
-        if (parts[1] === `refs/heads/${targetBranch}` || parts[1] === 'HEAD') {
+        if (parts[1] === `refs/heads/${targetBranch}`) {
           remoteCommit = parts[0];
           remoteCommitShort = remoteCommit.substring(0, 7);
+          foundSpecific = true;
           break;
+        }
+      }
+    }
+
+    if (!foundSpecific) {
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          if (parts[1] === 'HEAD') {
+            remoteCommit = parts[0];
+            remoteCommitShort = remoteCommit.substring(0, 7);
+            break;
+          }
         }
       }
     }

@@ -361,12 +361,47 @@ export interface CliExecutionParams {
   sessionId?: string;
   resume?: boolean;
   workDir?: string;
+  agentId?: string;
   onEvent: (event: { type: string; data: any }) => void;
   onDone: (exitCode: number | null, signal: string | null) => void;
   onError: (error: Error) => void;
 }
 
-export function executeGeminiCli(params: CliExecutionParams, isRetry = false): { cancel: () => void } {
+export const AGENT_FALLBACK_CHAINS: Record<string, string[]> = {
+  auditor: ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'],
+  investigator: ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3-flash'],
+  principal: ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-3.5-flash'],
+  tester: ['gemini-3-flash', 'gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'],
+  worker: ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-2.5-flash-lite', 'gemini-3-flash'],
+};
+
+export function getApiErrorCode(code: number, stderrText: string, reportedErrorText: string): number | null {
+  const combined = (stderrText + ' ' + reportedErrorText).toLowerCase();
+  if (combined.includes('409') || combined.includes('conflict') || combined.includes('already_exists')) {
+    return 409;
+  }
+  if (combined.includes('429') || combined.includes('quota') || combined.includes('rate limit') || combined.includes('terminalquotaerror')) {
+    return 429;
+  }
+  if (combined.includes('500') || combined.includes('internal error') || combined.includes('internal server error')) {
+    return 500;
+  }
+  if (combined.includes('503') || combined.includes('unavailable') || combined.includes('service unavailable') || combined.includes('experiencing high demand')) {
+    return 503;
+  }
+  return null;
+}
+
+export function executeGeminiCli(
+  params: CliExecutionParams,
+  isRetry = false,
+  state?: {
+    currentModel?: string;
+    retryCount?: number;
+    fallbackIndex?: number;
+    fallbackChain?: string[];
+  }
+): { cancel: () => void } {
   let cliPath = getResolvedCliPath();
 
   let cwd = params.workDir || (params.authorizedDirs && params.authorizedDirs[0]) || process.cwd();
@@ -395,10 +430,28 @@ export function executeGeminiCli(params: CliExecutionParams, isRetry = false): {
   }
 
   // Determine model: respect the configured model for the agent/execution, default to 'gemini-3.5-flash-lite'
-  let chosenModel = params.model;
-  if (!chosenModel || chosenModel === 'auto') {
-    chosenModel = 'gemini-3.5-flash-lite';
+  let requestedModel = state?.currentModel || params.model;
+  if (!requestedModel || requestedModel === 'auto') {
+    requestedModel = 'gemini-3.5-flash-lite';
   }
+
+  // Infer agentId if not explicitly provided
+  let agentId = params.agentId?.toLowerCase() || '';
+  if (!agentId && requestedModel) {
+    if (requestedModel.includes('3.8')) agentId = 'auditor';
+    else if (requestedModel.includes('3.7')) agentId = 'investigator';
+    else if (requestedModel.includes('3.5-flash-lite')) agentId = 'principal';
+    else if (requestedModel.includes('3.1-flash-lite')) agentId = 'worker';
+    else if (requestedModel === 'gemini-3-flash') agentId = 'tester';
+  }
+
+  const fallbackChain = state?.fallbackChain || (AGENT_FALLBACK_CHAINS[agentId] || []);
+  const retryCount = state?.retryCount || 1;
+  const fallbackIndex = state?.fallbackIndex !== undefined 
+    ? state.fallbackIndex 
+    : (fallbackChain.indexOf(requestedModel) !== -1 ? fallbackChain.indexOf(requestedModel) : -1);
+
+  const chosenModel = requestedModel;
   args.push('-m', chosenModel);
 
   if (params.approvalMode) {
@@ -438,8 +491,8 @@ export function executeGeminiCli(params: CliExecutionParams, isRetry = false): {
   activeChildProcess = child;
   sysLog.info(
     'CLI',
-    `Iniciando execução Gemini CLI [Modelo: ${chosenModel}] (Prompt: "${params.prompt.substring(0, 50)}${params.prompt.length > 50 ? '...' : ''}")`,
-    { model: chosenModel, sessionId: params.sessionId, approvalMode: params.approvalMode, cwd }
+    `Iniciando execução Gemini CLI [Modelo: ${chosenModel}, Agente: ${agentId || 'N/D'}, Tentativa: ${retryCount}/3] (Prompt: "${params.prompt.substring(0, 50)}${params.prompt.length > 50 ? '...' : ''}")`,
+    { model: chosenModel, sessionId: params.sessionId, approvalMode: params.approvalMode, cwd, agentId, retryCount }
   );
 
   let buffer = '';
@@ -543,7 +596,72 @@ export function executeGeminiCli(params: CliExecutionParams, isRetry = false): {
         reportedErrorText.toLowerCase().includes('quota') ||
         reportedErrorText.includes('429');
 
-      // If quota was exceeded on another model, attempt auto-fallback to gemini-3.5-flash-lite
+      const apiErrCode = getApiErrorCode(code, stderrText, reportedErrorText);
+
+      if (apiErrCode !== null) {
+        if (retryCount < 3) {
+          const nextRetry = retryCount + 1;
+          const backoffDelay = 1500 * retryCount;
+          params.onEvent({
+            type: 'stream_event',
+            data: {
+              type: 'message',
+              role: 'assistant',
+              content: `\n⚠️ *[Tentativa ${retryCount}/3] Falha com status HTTP ${apiErrCode}. Retentando no modelo ${chosenModel} em ${backoffDelay / 1000}s...*\n\n`,
+            },
+          });
+          sysLog.warn('CLI', `Falha temporária com status ${apiErrCode} no modelo ${chosenModel}. Agendando tentativa ${nextRetry}/3 em ${backoffDelay}ms.`);
+          activeChildProcess = null;
+          setTimeout(() => {
+            executeGeminiCli(params, true, {
+              currentModel: chosenModel,
+              retryCount: nextRetry,
+              fallbackIndex,
+              fallbackChain,
+            });
+          }, backoffDelay);
+          return;
+        } else {
+          // 3 attempts have failed. Time for fallback!
+          if (fallbackChain && fallbackChain.length > 0) {
+            const nextIdx = fallbackIndex + 1;
+            if (nextIdx < fallbackChain.length) {
+              const nextModel = fallbackChain[nextIdx];
+              params.onEvent({
+                type: 'stream_event',
+                data: {
+                  type: 'message',
+                  role: 'assistant',
+                  content: `\n⚠️ *[Fallback de Modelo] 3 tentativas falharam no modelo ${chosenModel} (Erro ${apiErrCode}). Alternando para o modelo de fallback do agente: ${nextModel}...*\n\n`,
+                },
+              });
+              sysLog.warn('CLI', `3 tentativas falharam no modelo ${chosenModel}. Alternando para o fallback ${nextModel} do agente ${agentId}.`);
+              activeChildProcess = null;
+              setTimeout(() => {
+                executeGeminiCli(params, true, {
+                  currentModel: nextModel,
+                  retryCount: 1,
+                  fallbackIndex: nextIdx,
+                  fallbackChain,
+                });
+              }, 2000);
+              return;
+            }
+          }
+          // Exhausted all retries and fallbacks
+          sysLog.error('CLI', `Todos os modelos de fallback falharam para o agente ${agentId}. Interrompendo tarefa.`);
+          params.onEvent({
+            type: 'stream_event',
+            data: {
+              type: 'message',
+              role: 'assistant',
+              content: `\n❌ *[Erro Crítico] Todos os modelos de fallback falharam para o agente ${agentId}. A execução foi interrompida devido à indisponibilidade persistente do serviço (Status: ${apiErrCode}).*\n\n`,
+            },
+          });
+        }
+      }
+
+      // Default fallback catch-all if quota was exceeded on another model
       if (isQuotaError && !isRetry && chosenModel !== 'gemini-3.5-flash-lite') {
         params.onEvent({
           type: 'stream_event',

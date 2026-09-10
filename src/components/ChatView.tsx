@@ -27,6 +27,7 @@ import { ChatMessage, ToolCallStep, CommandConfig, AgentConfig, ProjectItem, Aut
 import { DEFAULT_AGENTS } from '../constants/defaultAgents.js';
 import { RawPayloadViewer } from './RawPayloadViewer.js';
 import { getRawInspectionData } from '../utils/rawPayloadUtils.js';
+import { TokenMonitorBar } from './TokenMonitorBar.js';
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -42,6 +43,8 @@ interface ChatViewProps {
   onStopTts: () => void;
   onTranscribeAudio: (audioBlob: Blob) => Promise<string>;
   approvalMode: 'default' | 'auto_edit' | 'yolo' | 'plan';
+  onChangeApprovalMode?: (mode: 'default' | 'auto_edit' | 'yolo' | 'plan') => void;
+  metrics?: { rpm: number; tpm: number; rpd: number };
   cliStatus?: import('../types.js').CliStatus | null;
   onOpenSettings?: (tab?: string) => void;
   activeProject?: ProjectItem | null;
@@ -64,6 +67,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onStopTts,
   onTranscribeAudio,
   approvalMode,
+  onChangeApprovalMode,
+  metrics,
   cliStatus,
   onOpenSettings,
   activeProject = null,
@@ -237,34 +242,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50/50 dark:bg-zinc-950/40 relative">
-      {/* Top Controls Bar with "Mostrar Oculto" (Eye Icon Button) */}
-      <div className="px-4 py-2 bg-white/90 dark:bg-zinc-900/90 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-3 text-xs shrink-0 shadow-xs z-10">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowRawPayloadGlobal(!showRawPayloadGlobal)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition cursor-pointer border ${
-              showRawPayloadGlobal
-                ? 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/50 shadow-xs'
-                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-            }`}
-            title="Clique para habilitar visualização de payloads brutos (Tudo que foi enviado e retornado do modelo do 1º ao último token)"
-          >
-            {showRawPayloadGlobal ? <Eye className="w-4 h-4 text-amber-500" /> : <EyeOff className="w-4 h-4" />}
-            <span className="font-semibold">
-              {showRawPayloadGlobal ? 'Mostrar Oculto: ATIVADO' : 'Mostrar Oculto (Ver Payloads Brutos)'}
-            </span>
-          </button>
-
-          <span className="text-[11px] text-zinc-500 hidden sm:inline">
-            {showRawPayloadGlobal
-              ? '👁️ Exibindo system prompt, contexto de workspace, SSE tokens e logs brutos de execução.'
-              : 'Clique no botão do olho para inspecionar requisição e resposta completas do modelo.'}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 font-mono text-[11px] text-zinc-500">
-          <span>Agente: <strong className="text-zinc-800 dark:text-zinc-200">{currentAgent?.displayName}</strong></span>
-        </div>
+      {/* Top Controls Bar with Centered Token Monitor */}
+      <div className="px-4 py-2.5 bg-white/90 dark:bg-zinc-900/90 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-xs shrink-0 shadow-xs z-10">
+        <TokenMonitorBar
+          messages={messages}
+          isStreaming={isStreaming}
+          agent={currentAgent}
+          activeProject={activeProject}
+          authorizedDirs={authorizedDirs}
+          skills={skills}
+          mcpServers={mcpServers}
+          metrics={metrics || { rpm: 1, tpm: 0, rpd: 1 }}
+          onOpenContextSettings={() => onOpenSettings?.('context')}
+        />
       </div>
 
       {/* Missing or Invalid API Key Alert Banner */}
@@ -567,21 +557,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
         )}
 
         <div className="max-w-4xl mx-auto flex flex-col gap-2">
-          {/* Active Context Banner */}
-          <div className="flex items-center justify-between text-[11px] text-zinc-500 px-1">
-            <div className="flex items-center gap-2">
-              <span>Agente:</span>
-              <span className="font-medium text-zinc-800 dark:text-zinc-200">{currentAgent?.displayName || 'Principal / Orchestrator'}</span>
-              <span className="text-zinc-400">({currentAgent?.model || 'gemini-3.5-flash-lite'})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span>Aprovação:</span>
-              <span className="font-mono px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
-                {approvalMode}
-              </span>
-            </div>
-          </div>
-
           {/* Input Box */}
           <div className="flex items-end gap-2 bg-zinc-100 dark:bg-zinc-800/80 rounded-2xl p-2 border border-zinc-200 dark:border-zinc-700/60 focus-within:border-blue-500/80 focus-within:ring-2 focus-within:ring-blue-500/20 transition">
             {/* Microphone Button (STT) */}
@@ -651,6 +626,58 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <Send className="w-4 h-4" />
               </button>
             )}
+          </div>
+
+          {/* Active Context & Settings Row (Below Input Box) */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-zinc-500 px-1 mt-1 gap-2">
+            {/* Left side: Agent select */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-medium text-zinc-400">Agente:</span>
+              <div className="flex items-center gap-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 px-2.5 py-1 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm transition">
+                <Bot className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                <select
+                  value={selectedAgentId}
+                  onChange={(e) => onSelectAgent(e.target.value)}
+                  className="bg-transparent text-[11px] font-bold text-zinc-800 dark:text-zinc-200 outline-none pr-1 cursor-pointer"
+                >
+                  {(agents && agents.length > 0 ? agents : DEFAULT_AGENTS).map((agent) => (
+                    <option key={agent.id} value={agent.id} className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
+                      {agent.displayName || agent.name} ({agent.model})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Right side: Clickable Approval Mode Selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-medium text-zinc-400 font-sans">Modo de Aprovação:</span>
+              <div className="flex items-center gap-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 px-2.5 py-1 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm transition">
+                <Sliders className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <select
+                  value={approvalMode}
+                  onChange={(e) => {
+                    if (onChangeApprovalMode) {
+                      onChangeApprovalMode(e.target.value as any);
+                    }
+                  }}
+                  className="bg-transparent text-[11px] font-bold text-zinc-800 dark:text-zinc-200 outline-none pr-1 cursor-pointer font-sans"
+                >
+                  <option value="default" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
+                    Padrão (Confirmar comandos)
+                  </option>
+                  <option value="auto_edit" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
+                    Auto-Editar (Foco em edição)
+                  </option>
+                  <option value="yolo" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
+                    YOLO (Executar tudo direto)
+                  </option>
+                  <option value="plan" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
+                    Planejar (Planejar antes)
+                  </option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -8,10 +8,16 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
-  FolderPlus,
   Sparkles,
   Terminal,
-  Settings,
+  MoreVertical,
+  Archive,
+  History,
+  FolderCheck,
+  CheckSquare,
+  Square,
+  X,
+  FileCheck2,
 } from 'lucide-react';
 import { SessionItem, ProjectItem } from '../types.js';
 import { calculateSessionTokens, formatTokenCount } from '../utils/tokenUtils.js';
@@ -29,6 +35,17 @@ interface LeftSidebarProps {
   onSelectProject: (proj: ProjectItem) => void;
   onOpenProjectsModal: () => void;
   onOpenSettings: (tab?: string) => void;
+
+  // New features
+  onOpenDirsModal: () => void;
+  onOpenHistory: () => void;
+  onOpenArchivedChats: () => void;
+  onUpdateSession: (id: string, updates: Partial<SessionItem>) => void;
+  onDeriveSession: (sess: SessionItem) => void;
+  selectedSessionIds: string[];
+  setSelectedSessionIds: React.Dispatch<React.SetStateAction<string[]>>;
+  onDeleteMultipleSessions: (ids: string[]) => void;
+  onArchiveMultipleSessions: (ids: string[]) => void;
 }
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
@@ -44,17 +61,52 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   onSelectProject,
   onOpenProjectsModal,
   onOpenSettings,
+
+  onOpenDirsModal,
+  onOpenHistory,
+  onOpenArchivedChats,
+  onUpdateSession,
+  onDeriveSession,
+  selectedSessionIds,
+  setSelectedSessionIds,
+  onDeleteMultipleSessions,
+  onArchiveMultipleSessions,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [activeMenuSessionId, setActiveMenuSessionId] = useState<string | null>(null);
+  const [showProjMenuId, setShowProjMenuId] = useState<string | null>(null);
 
-  // Filtered sessions
-  const filteredSessions = sessions.filter((s) => {
+  // Filtered sessions (only non-archived ones)
+  const nonArchivedSessions = sessions.filter((s) => s.isArchived !== true);
+
+  const filteredSessions = nonArchivedSessions.filter((s) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
     const titleMatch = (s.title || '').toLowerCase().includes(term);
     const msgMatch = s.messages?.some((m) => m.content.toLowerCase().includes(term));
     return titleMatch || msgMatch;
   });
+
+  const toggleSelectSession = (sessId: string) => {
+    setSelectedSessionIds((prev) =>
+      prev.includes(sessId) ? prev.filter((id) => id !== sessId) : [...prev, sessId]
+    );
+  };
+
+  const handleBatchDelete = () => {
+    if (confirm(`Deseja realmente excluir as ${selectedSessionIds.length} conversas selecionadas?`)) {
+      onDeleteMultipleSessions(selectedSessionIds);
+      setSelectedSessionIds([]);
+      setIsSelectionMode(false);
+    }
+  };
+
+  const handleBatchArchive = () => {
+    onArchiveMultipleSessions(selectedSessionIds);
+    setSelectedSessionIds([]);
+    setIsSelectionMode(false);
+  };
 
   return (
     <aside
@@ -71,7 +123,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             </div>
             <div className="flex flex-col min-w-0">
               <span className="font-bold text-zinc-100 text-xs tracking-tight truncate">
-                Gemini CLI Studio
+                Gemini Code by Satiro
               </span>
               <span className="text-[10px] text-zinc-400 font-mono truncate">
                 AI Coding Agent
@@ -118,7 +170,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             <button
               onClick={onOpenProjectsModal}
               title="Gerenciar Projetos"
-              className="text-blue-400 hover:text-blue-300 hover:underline cursor-pointer"
+              className="text-blue-400 hover:text-blue-300 hover:underline cursor-pointer text-[10px]"
             >
               + Gerenciar
             </button>
@@ -161,10 +213,59 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 <MessageSquare className="w-3 h-3 text-emerald-400" />
                 Histórico de Chats
               </span>
-              <span className="bg-zinc-800 text-zinc-400 px-1.5 py-0.2 rounded font-sans">
-                {sessions.length}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => {
+                    setIsSelectionMode(!isSelectionMode);
+                    setSelectedSessionIds([]);
+                  }}
+                  title={isSelectionMode ? 'Cancelar seleção' : 'Selecionar vários chats'}
+                  className={`p-1 rounded transition cursor-pointer ${
+                    isSelectionMode ? 'bg-blue-600/30 text-blue-400' : 'hover:bg-zinc-800 text-zinc-400'
+                  }`}
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                </button>
+                <span className="bg-zinc-800 text-zinc-400 px-1.5 py-0.2 rounded font-sans">
+                  {nonArchivedSessions.length}
+                </span>
+              </div>
             </div>
+
+            {/* Batch actions bar in selection mode */}
+            {isSelectionMode && selectedSessionIds.length > 0 && (
+              <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-800/80 border border-zinc-700/60 text-xs gap-1">
+                <span className="font-medium text-[11px] text-zinc-300">
+                  {selectedSessionIds.length} sel.
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleBatchArchive}
+                    title="Arquivar selecionados"
+                    className="p-1 hover:bg-zinc-700 rounded text-blue-400 hover:text-blue-300 transition"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={handleBatchDelete}
+                    title="Excluir selecionados"
+                    className="p-1 hover:bg-zinc-700 rounded text-rose-400 hover:text-rose-300 transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsSelectionMode(false);
+                      setSelectedSessionIds([]);
+                    }}
+                    title="Sair do modo de seleção"
+                    className="p-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Search Input */}
             <div className="relative">
@@ -193,20 +294,32 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             const isActive = sess.id === currentSessionId;
             const tokenStats = calculateSessionTokens(sess.messages || []);
             const totalTokens = sess.tokenStats?.totalTokens || tokenStats.totalTokens;
+            const isSelected = selectedSessionIds.includes(sess.id);
 
             if (!isExpanded) {
               return (
                 <button
                   key={sess.id}
-                  onClick={() => onSelectSession(sess)}
+                  onClick={() => {
+                    if (isSelectionMode) {
+                      toggleSelectSession(sess.id);
+                    } else {
+                      onSelectSession(sess);
+                    }
+                  }}
                   title={`${sess.title || 'Conversa'} (${formatTokenCount(totalTokens)} tokens)`}
-                  className={`w-10 h-10 mx-auto rounded-xl flex items-center justify-center transition ${
-                    isActive
+                  className={`w-10 h-10 mx-auto rounded-xl flex items-center justify-center relative transition ${
+                    isSelected
                       ? 'bg-blue-600 text-white shadow-md'
+                      : isActive
+                      ? 'bg-blue-900/40 text-white border border-blue-500/30'
                       : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
                   }`}
                 >
                   <MessageSquare className="w-4 h-4" />
+                  {isSelected && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full border border-zinc-900" />
+                  )}
                 </button>
               );
             }
@@ -219,14 +332,38 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     ? 'bg-blue-900/30 border-blue-500/50 text-white'
                     : 'bg-zinc-900/50 border-transparent hover:bg-zinc-800/80 text-zinc-300'
                 }`}
-                onClick={() => onSelectSession(sess)}
+                onClick={() => {
+                  if (isSelectionMode) {
+                    toggleSelectSession(sess.id);
+                  } else {
+                    onSelectSession(sess);
+                  }
+                }}
               >
-                <div className="flex items-start gap-2 min-w-0 flex-1 pr-1">
-                  <MessageSquare
-                    className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
-                      isActive ? 'text-blue-400' : 'text-zinc-500'
-                    }`}
-                  />
+                <div className="flex items-start gap-2.5 min-w-0 flex-1 pr-1">
+                  {/* Selection Checkbox */}
+                  {isSelectionMode ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelectSession(sess.id);
+                      }}
+                      className="mt-0.5 shrink-0 text-blue-400 hover:text-blue-300"
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="w-4 h-4" />
+                      ) : (
+                        <Square className="w-4 h-4 text-zinc-600 hover:text-zinc-400" />
+                      )}
+                    </button>
+                  ) : (
+                    <MessageSquare
+                      className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
+                        isActive ? 'text-blue-400' : 'text-zinc-500'
+                      }`}
+                    />
+                  )}
+
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-medium truncate">
                       {sess.title || 'Nova Conversa'}
@@ -243,32 +380,161 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                   </div>
                 </div>
 
-                {/* Delete button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm('Deseja excluir esta conversa?')) {
-                      onDeleteSession(sess.id);
-                    }
-                  }}
-                  title="Excluir Chat"
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-900/50 text-zinc-400 hover:text-rose-400 transition"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {/* Individual Chat Options Trigger Button */}
+                {!isSelectionMode && (
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuSessionId(activeMenuSessionId === sess.id ? null : sess.id);
+                        setShowProjMenuId(null);
+                      }}
+                      title="Opções do Chat"
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition"
+                    >
+                      <MoreVertical className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Options Dropdown Menu */}
+                    {activeMenuSessionId === sess.id && (
+                      <div className="absolute right-0 mt-1 w-44 rounded-xl border border-zinc-700 bg-zinc-850 p-1 shadow-xl z-35 text-xs animate-in fade-in duration-100">
+                        {/* Option: Derivar Chat */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeriveSession(sess);
+                            setActiveMenuSessionId(null);
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-700/80 rounded-lg text-zinc-200 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
+                        >
+                          <FileCheck2 className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Derivar Chat</span>
+                        </button>
+
+                        {/* Option: Adicionar ao Projeto... */}
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowProjMenuId(showProjMenuId === sess.id ? null : sess.id);
+                            }}
+                            className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-700/80 rounded-lg text-zinc-200 hover:text-white flex items-center justify-between gap-1.5 transition cursor-pointer"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <FolderGit2 className="w-3.5 h-3.5 text-blue-400" />
+                              <span>Adicionar a...</span>
+                            </span>
+                            <ChevronRight className="w-3 h-3 text-zinc-500" />
+                          </button>
+
+                          {/* Submenu Projects */}
+                          {showProjMenuId === sess.id && (
+                            <div className="absolute left-[-150px] top-0 w-36 rounded-lg border border-zinc-700 bg-zinc-850 p-1 shadow-xl z-40 text-[11px]">
+                              {projects.map((proj) => (
+                                <button
+                                  key={proj.id}
+                                  onClick={(ev) => {
+                                    ev.stopPropagation();
+                                    onUpdateSession(sess.id, { projectId: proj.id });
+                                    setActiveMenuSessionId(null);
+                                    setShowProjMenuId(null);
+                                  }}
+                                  className="w-full text-left px-2 py-1 hover:bg-zinc-700 rounded-md text-zinc-300 hover:text-white truncate transition cursor-pointer"
+                                >
+                                  📁 {proj.name}
+                                </button>
+                              ))}
+                              {projects.length === 0 && (
+                                <div className="p-2 text-zinc-500 text-center text-[10px]">Sem projetos</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Option: Arquivar */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateSession(sess.id, { isArchived: true });
+                            setActiveMenuSessionId(null);
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-700/80 rounded-lg text-zinc-200 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
+                        >
+                          <Archive className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Arquivar</span>
+                        </button>
+
+                        {/* Divider */}
+                        <div className="h-px bg-zinc-700/50 my-1" />
+
+                        {/* Option: Remover */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('Deseja realmente excluir esta conversa?')) {
+                              onDeleteSession(sess.id);
+                              setActiveMenuSessionId(null);
+                            }
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 hover:bg-rose-900/40 rounded-lg text-rose-400 hover:text-rose-300 flex items-center gap-1.5 transition cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Remover</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })
         )}
       </div>
 
-      {/* Sidebar Footer */}
-      <div className="p-2 border-t border-zinc-800 shrink-0">
+      {/* Sidebar Footer with Moved Headers Buttons */}
+      <div className="p-2 border-t border-zinc-800 shrink-0 space-y-1">
+        {/* Link para Arquivos de Chats Arquivados */}
+        <button
+          onClick={onOpenArchivedChats}
+          title="Abrir Chats Arquivados (Arquivos)"
+          className={`w-full flex items-center justify-start gap-2 py-2 px-3 rounded-xl text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition ${
+            !isExpanded ? 'justify-center px-0' : ''
+          }`}
+        >
+          <Archive className="w-4 h-4 text-amber-500 shrink-0" />
+          {isExpanded && <span>Arquivos</span>}
+        </button>
+
+        {/* Diretórios */}
+        <button
+          onClick={onOpenDirsModal}
+          title="Diretórios Autorizados"
+          className={`w-full flex items-center justify-start gap-2 py-2 px-3 rounded-xl text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition ${
+            !isExpanded ? 'justify-center px-0' : ''
+          }`}
+        >
+          <FolderCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+          {isExpanded && <span>Diretórios</span>}
+        </button>
+
+        {/* Histórico */}
+        <button
+          onClick={onOpenHistory}
+          title="Histórico de Sessões"
+          className={`w-full flex items-center justify-start gap-2 py-2 px-3 rounded-xl text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition ${
+            !isExpanded ? 'justify-center px-0' : ''
+          }`}
+        >
+          <History className="w-4 h-4 text-blue-400 shrink-0" />
+          {isExpanded && <span>Histórico</span>}
+        </button>
+
+        {/* Contexto & Tokens */}
         <button
           onClick={() => onOpenSettings('context')}
           title="Configurações de Contexto & Tokens"
-          className={`w-full flex items-center justify-center gap-2 py-2 px-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition ${
-            !isExpanded ? 'px-0' : ''
+          className={`w-full flex items-center justify-start gap-2 py-2 px-3 rounded-xl text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition ${
+            !isExpanded ? 'justify-center px-0' : ''
           }`}
         >
           <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />

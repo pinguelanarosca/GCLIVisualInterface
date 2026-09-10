@@ -7,6 +7,7 @@ import { ProjectsModal } from './components/ProjectsModal.js';
 import { HistoryDrawer } from './components/HistoryDrawer.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { LeftSidebar } from './components/LeftSidebar.js';
+import { ArchivedChatsModal } from './components/ArchivedChatsModal.js';
 import {
   ContextSettings,
   DEFAULT_CONTEXT_SETTINGS,
@@ -88,6 +89,8 @@ export function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<string>('cli');
+  const [isArchivedChatsOpen, setIsArchivedChatsOpen] = useState(false);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
 
   // Audio Settings & Narration State
   const [audioSettings, setAudioSettings] = useState<AudioSettings>({
@@ -295,6 +298,7 @@ export function App() {
           sessionId: currentSessionId,
           resume: messages.length > 0,
           workDir,
+          agentId: currentAgent?.id,
         }),
       });
 
@@ -705,6 +709,95 @@ export function App() {
     }
   };
 
+  const handleUpdateSession = async (id: string, updates: Partial<SessionItem>) => {
+    const sess = sessions.find((s) => s.id === id);
+    if (!sess) return;
+    const updatedSess = { ...sess, ...updates };
+
+    const res = await fetch('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedSess),
+    });
+    if (res.ok) {
+      const sessRes = await fetch('/api/sessions');
+      if (sessRes.ok) {
+        const data = await sessRes.json();
+        setSessions(data);
+
+        if (id === currentSessionId) {
+          setMessages(updatedSess.messages || []);
+          if (updates.projectId) {
+            const p = projects.find((x) => x.id === updates.projectId);
+            if (p) setActiveProject(p);
+          }
+        }
+      }
+    }
+  };
+
+  const handleDeriveSession = async (originalSess: SessionItem) => {
+    const { compressedMessages } = compressContextMessages(originalSess.messages || [], contextSettings);
+    const newSessionId = generateSessionId();
+    const derivedSession: SessionItem = {
+      id: newSessionId,
+      title: `${originalSess.title} (Derivado)`,
+      projectId: originalSess.projectId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messageCount: compressedMessages.length,
+      messages: compressedMessages,
+      statusGrade: 'CONFIGURED',
+    };
+
+    const res = await fetch('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(derivedSession),
+    });
+
+    if (res.ok) {
+      const sessRes = await fetch('/api/sessions');
+      if (sessRes.ok) {
+        const data = await sessRes.json();
+        setSessions(data);
+        setCurrentSessionId(newSessionId);
+        setMessages(compressedMessages);
+      }
+    }
+  };
+
+  const handleDeleteMultipleSessions = async (ids: string[]) => {
+    for (const id of ids) {
+      await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
+    }
+    setSessions((prev) => prev.filter((s) => !ids.includes(s.id)));
+    if (ids.includes(currentSessionId)) {
+      handleNewSession();
+    }
+  };
+
+  const handleArchiveMultipleSessions = async (ids: string[]) => {
+    for (const id of ids) {
+      const sess = sessions.find((s) => s.id === id);
+      if (sess) {
+        const updatedSess = { ...sess, isArchived: true };
+        await fetch('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedSess),
+        });
+      }
+    }
+    const sessRes = await fetch('/api/sessions');
+    if (sessRes.ok) {
+      setSessions(await sessRes.json());
+    }
+    if (ids.includes(currentSessionId)) {
+      handleNewSession();
+    }
+  };
+
   // Configuration saves
   const handleSaveAgent = async (agent: AgentConfig) => {
     const res = await fetch('/api/agents', {
@@ -847,6 +940,15 @@ export function App() {
           }}
           onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
           onOpenSettings={handleOpenSettings}
+          onOpenDirsModal={() => setIsDirsModalOpen(true)}
+          onOpenHistory={() => setIsHistoryOpen(true)}
+          onOpenArchivedChats={() => setIsArchivedChatsOpen(true)}
+          onUpdateSession={handleUpdateSession}
+          onDeriveSession={handleDeriveSession}
+          selectedSessionIds={selectedSessionIds}
+          setSelectedSessionIds={setSelectedSessionIds}
+          onDeleteMultipleSessions={handleDeleteMultipleSessions}
+          onArchiveMultipleSessions={handleArchiveMultipleSessions}
         />
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -865,6 +967,8 @@ export function App() {
               onStopTts={handleStopTts}
               onTranscribeAudio={handleTranscribeAudio}
               approvalMode={approvalMode}
+              onChangeApprovalMode={setApprovalMode}
+              metrics={liveMetrics}
               cliStatus={cliStatus}
               onOpenSettings={handleOpenSettings}
               activeProject={activeProject}
@@ -925,6 +1029,16 @@ export function App() {
         onNewSession={handleNewSession}
         onDeleteSession={handleDeleteSession}
         projects={projects}
+      />
+
+      {/* Archived Chats Modal */}
+      <ArchivedChatsModal
+        isOpen={isArchivedChatsOpen}
+        onClose={() => setIsArchivedChatsOpen(false)}
+        sessions={sessions}
+        onSelectSession={handleSelectSession}
+        onUnarchiveSession={(id) => handleUpdateSession(id, { isArchived: false })}
+        onDeleteSession={handleDeleteSession}
       />
 
       {/* Multi-Tab Settings Modal */}
