@@ -1,6 +1,29 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
 import { createServer as createViteServer } from 'vite';
+
+// Attempt to load .env from fallback locations if process.env.GEMINI_API_KEY is not set
+const fallbackEnvPaths = [
+  path.join(process.cwd(), '.env'),
+  path.join(os.homedir(), '.gemini', '.env'),
+  '/opt/gemini-gui/.env',
+];
+for (const envFile of fallbackEnvPaths) {
+  if (fs.existsSync(envFile)) {
+    try {
+      const raw = fs.readFileSync(envFile, 'utf-8');
+      for (const line of raw.split('\n')) {
+        const match = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)?\s*$/);
+        if (match && !process.env[match[1]]) {
+          process.env[match[1]] = (match[2] || '').trim().replace(/^['"]|['"]$/g, '');
+        }
+      }
+    } catch {}
+  }
+}
 import { detectCliStatus, executeGeminiCli, cancelActiveExecution, setCustomCliPath } from './server/gemini-cli-service.js';
 import { ensureAgentsSeeded, loadAgents, saveAgentToFile, deleteAgent } from './server/agents-service.js';
 import { ensureSkillsSeeded, loadSkills, saveSkillToFile, deleteSkill } from './server/skills-service.js';
@@ -52,6 +75,35 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  app.post('/api/config/api-key', (req, res) => {
+    const { apiKey } = req.body;
+    if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
+      return res.status(400).json({ error: 'Chave de API não pode ser vazia.' });
+    }
+    const cleanKey = apiKey.trim();
+    process.env.GEMINI_API_KEY = cleanKey;
+
+    try {
+      const envFile = path.join(process.cwd(), '.env');
+      let content = '';
+      if (fs.existsSync(envFile)) {
+        content = fs.readFileSync(envFile, 'utf-8');
+        if (/GEMINI_API_KEY=/.test(content)) {
+          content = content.replace(/GEMINI_API_KEY=.*(\r?\n|$)/g, `GEMINI_API_KEY=${cleanKey}\n`);
+        } else {
+          content += `\nGEMINI_API_KEY=${cleanKey}\n`;
+        }
+      } else {
+        content = `GEMINI_API_KEY=${cleanKey}\n`;
+      }
+      fs.writeFileSync(envFile, content);
+    } catch (err: any) {
+      console.warn('Não foi possível gravar no .env:', err.message);
+    }
+
+    res.json({ success: true, authConfigured: true });
+  });
+
   // 2. Real Execution via Server-Sent Events (SSE)
   app.post('/api/cli/execute', (req, res) => {
     const { prompt, model, approvalMode, authorizedDirs, sessionId, workDir } = req.body;
@@ -92,8 +144,10 @@ async function startServer() {
       },
     });
 
-    req.on('close', () => {
-      execution.cancel();
+    res.on('close', () => {
+      if (!res.writableEnded) {
+        execution.cancel();
+      }
     });
   });
 
@@ -302,14 +356,25 @@ async function startServer() {
   });
 
   // --- Vite middleware / static files ---
-  if (process.env.NODE_ENV !== 'production') {
+  const isProduction = process.env.NODE_ENV === 'production' || !fs.existsSync(path.join(process.cwd(), 'index.html'));
+
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    // Dynamically search for dist/index.html across common execution directories
+    const candidateDirs = [
+      path.join(process.cwd(), 'dist'),
+      process.cwd(),
+      __dirname,
+      path.resolve(__dirname, '..', 'dist'),
+      path.resolve(__dirname, '..'),
+    ];
+    const distPath = candidateDirs.find((dir) => fs.existsSync(path.join(dir, 'index.html'))) || path.join(process.cwd(), 'dist');
+
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

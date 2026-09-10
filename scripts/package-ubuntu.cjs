@@ -48,10 +48,17 @@ const launcherScript = `#!/usr/bin/env bash
 set -e
 export GEMINI_GUI_DIR="/opt/gemini-gui"
 export PORT="\${PORT:-3000}"
+export NODE_ENV="production"
 
 if ! command -v node &> /dev/null; then
     echo "ERRO: Node.js é necessário. Instale via 'sudo apt install nodejs npm'"
     exit 1
+fi
+
+# Check if port is already in use
+if command -v lsof &> /dev/null && lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo "Aviso: A porta $PORT já está em uso."
+    echo "Para liberar, execute: fuser -k $PORT/tcp ou pkill -f 'server.cjs'"
 fi
 
 cd /opt/gemini-gui

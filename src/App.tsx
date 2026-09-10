@@ -169,6 +169,11 @@ export function App() {
     }
   }, [theme]);
 
+  const handleOpenSettings = (tab?: string) => {
+    if (tab) setSettingsTab(tab);
+    setIsSettingsOpen(true);
+  };
+
   // Handle execution of real Gemini CLI via SSE
   const handleSendMessage = async (promptText: string) => {
     const userMsg: ChatMessage = {
@@ -221,6 +226,8 @@ export function App() {
       let buffer = '';
 
       let assistantContent = '';
+      let hasError = false;
+      let errorMessage = '';
       const toolCalls: Record<string, any> = {};
 
       while (true) {
@@ -240,7 +247,13 @@ export function App() {
               const eventPayload = JSON.parse(rawData);
 
               // Inspect Gemini CLI JSON stream event
-              if (eventPayload.type === 'message') {
+              if (eventPayload.type === 'process_error' || eventPayload.type === 'error') {
+                hasError = true;
+                errorMessage = eventPayload.message || eventPayload.text || errorMessage;
+              } else if (eventPayload.type === 'result' && eventPayload.status === 'error') {
+                hasError = true;
+                errorMessage = eventPayload.error?.message || errorMessage || 'Erro retornado pela API do Gemini.';
+              } else if (eventPayload.type === 'message') {
                 if (eventPayload.role === 'assistant' && eventPayload.content) {
                   assistantContent += eventPayload.content;
                 }
@@ -263,17 +276,36 @@ export function App() {
                   }
                 }
               } else if (eventPayload.text) {
-                // Stdout / raw text
-                assistantContent += (assistantContent ? '\n' : '') + eventPayload.text;
+                const text = eventPayload.text;
+                // Check if this is an authentication error from stderr
+                if (text.includes('Please set an Auth method') || text.includes('GEMINI_API_KEY')) {
+                  hasError = true;
+                  errorMessage = 'A chave GEMINI_API_KEY não foi encontrada no ambiente. Configure sua chave nas Configurações da GUI.';
+                } else {
+                  // Filter out cosmetic warnings from terminal
+                  const isBenign =
+                    text.includes('256-color support not detected') ||
+                    text.includes('Ripgrep is not available') ||
+                    text.includes('Falling back to GrepTool');
+                  if (!isBenign && !text.startsWith('{')) {
+                    assistantContent += (assistantContent ? '\n' : '') + text;
+                  }
+                }
               }
 
               // Update UI message state
+              const displayContent =
+                assistantContent ||
+                (hasError
+                  ? `⚠️ **Erro no Gemini CLI:** ${errorMessage}`
+                  : '');
+
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsgId
                     ? {
                         ...m,
-                        content: assistantContent,
+                        content: displayContent,
                         toolCalls: Object.values(toolCalls),
                         isStreaming: true,
                       }
@@ -287,13 +319,21 @@ export function App() {
         }
       }
 
+      // Compute final message content
+      let finalContent = assistantContent.trim();
+      if (hasError && !finalContent) {
+        finalContent = `⚠️ **Erro na Execução do Gemini CLI**\n\n${errorMessage || 'O processo do Gemini CLI falhou.'}\n\n💡 **Como resolver:**\n1. Abra as **Configurações** (ícone de engrenagem no topo);\n2. Insira sua chave no campo **GEMINI_API_KEY** e clique em **Salvar Chave**;\n3. Ou no terminal Ubuntu, execute:\n   \`\`\`bash\n   export GEMINI_API_KEY="sua_chave_aqui"\n   \`\`\``;
+      } else if (!finalContent) {
+        finalContent = '⚠️ Nenhuma resposta gerada pelo modelo. Verifique se sua chave GEMINI_API_KEY está válida no menu de Configurações.';
+      }
+
       // Finalize message
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsgId
             ? {
                 ...m,
-                content: assistantContent || 'Operação concluída pelo Gemini CLI.',
+                content: finalContent,
                 toolCalls: Object.values(toolCalls),
                 isStreaming: false,
               }
@@ -306,7 +346,7 @@ export function App() {
         userMsg,
         {
           ...assistantPlaceholder,
-          content: assistantContent || 'Operação concluída pelo Gemini CLI.',
+          content: finalContent,
           toolCalls: Object.values(toolCalls),
           isStreaming: false,
         },
@@ -682,6 +722,8 @@ export function App() {
             onStopTts={handleStopTts}
             onTranscribeAudio={handleTranscribeAudio}
             approvalMode={approvalMode}
+            cliStatus={cliStatus}
+            onOpenSettings={handleOpenSettings}
           />
         ) : (
           <FilesAndDiffsView
@@ -746,6 +788,7 @@ export function App() {
         }
         approvalMode={approvalMode}
         onChangeApprovalMode={setApprovalMode}
+        onRefreshStatus={refreshStatus}
       />
     </div>
   );

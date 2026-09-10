@@ -38,6 +38,8 @@ interface ChatViewProps {
   onStopTts: () => void;
   onTranscribeAudio: (audioBlob: Blob) => Promise<string>;
   approvalMode: 'default' | 'auto_edit' | 'yolo' | 'plan';
+  cliStatus?: import('../types.js').CliStatus | null;
+  onOpenSettings?: (tab?: string) => void;
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -54,6 +56,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onStopTts,
   onTranscribeAudio,
   approvalMode,
+  cliStatus,
+  onOpenSettings,
 }) => {
   const [inputText, setInputText] = useState('');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -217,6 +221,26 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50/50 dark:bg-zinc-950/40 relative">
+      {/* Missing API Key Alert Banner */}
+      {cliStatus && cliStatus.authConfigured === false && (
+        <div className="mx-4 md:mx-8 mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-200 shadow-xs shrink-0">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>
+              <strong>Chave GEMINI_API_KEY ausente:</strong> Configure sua chave de API para que o Gemini CLI possa gerar respostas no seu ambiente.
+            </span>
+          </div>
+          {onOpenSettings && (
+            <button
+              onClick={() => onOpenSettings('cli')}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition whitespace-nowrap cursor-pointer shadow-xs"
+            >
+              Configurar Chave
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-6">
         {messages.length === 0 ? (

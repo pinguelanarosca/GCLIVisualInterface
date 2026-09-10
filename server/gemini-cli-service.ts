@@ -65,6 +65,7 @@ export async function detectCliStatus(): Promise<CliStatus> {
             connectionState: 'connected',
             authConfigured,
             approvalMode: 'default',
+            errorMessage: !authConfigured ? 'Atenção: Nenhuma GEMINI_API_KEY detectada no ambiente.' : undefined,
           });
         } else {
           resolve({
@@ -112,7 +113,15 @@ export function executeGeminiCli(params: CliExecutionParams): { cancel: () => vo
     '--skip-trust',
   ];
 
-  if (params.model && params.model !== 'auto') {
+  // Only pass -m if a supported model is specified. If 'auto' or custom persona name, let CLI pick auto.
+  if (
+    params.model &&
+    params.model !== 'auto' &&
+    !params.model.includes('3.5-flash-lite') &&
+    !params.model.includes('3.6-flash') &&
+    !params.model.includes('3.7-flash') &&
+    !params.model.includes('3.8-flash')
+  ) {
     args.push('-m', params.model);
   }
 
@@ -146,6 +155,8 @@ export function executeGeminiCli(params: CliExecutionParams): { cancel: () => vo
   activeChildProcess = child;
 
   let buffer = '';
+  let stderrText = '';
+  let reportedErrorText = '';
 
   child.stdout?.on('data', (chunk) => {
     buffer += chunk.toString();
@@ -159,6 +170,16 @@ export function executeGeminiCli(params: CliExecutionParams): { cancel: () => vo
       if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
         try {
           const parsed = JSON.parse(trimmed);
+          if (parsed.type === 'result' && parsed.status === 'error') {
+            reportedErrorText = parsed.error?.message || 'Erro de execução reportado pelo Gemini CLI.';
+            params.onEvent({
+              type: 'process_error',
+              data: {
+                message: reportedErrorText,
+                error: parsed.error,
+              },
+            });
+          }
           params.onEvent({ type: 'stream_event', data: parsed });
           continue;
         } catch {
@@ -171,6 +192,7 @@ export function executeGeminiCli(params: CliExecutionParams): { cancel: () => vo
 
   child.stderr?.on('data', (chunk) => {
     const raw = chunk.toString();
+    stderrText += raw;
     params.onEvent({ type: 'stderr_raw', data: { text: raw } });
   });
 
@@ -183,11 +205,33 @@ export function executeGeminiCli(params: CliExecutionParams): { cancel: () => vo
     if (buffer.trim()) {
       try {
         const parsed = JSON.parse(buffer.trim());
+        if (parsed.type === 'result' && parsed.status === 'error') {
+          reportedErrorText = parsed.error?.message || reportedErrorText;
+        }
         params.onEvent({ type: 'stream_event', data: parsed });
       } catch {
         params.onEvent({ type: 'stdout_raw', data: { text: buffer.trim() } });
       }
     }
+
+    if (code !== 0 && code !== null) {
+      let finalMessage = reportedErrorText || stderrText.trim();
+      if (stderrText.includes('Please set an Auth method') || stderrText.includes('GEMINI_API_KEY')) {
+        finalMessage = 'A chave de API do Gemini (GEMINI_API_KEY) não está configurada no seu ambiente. Configure-a no menu de Configurações da GUI ou exporte a variável no terminal.';
+      } else if (!finalMessage) {
+        finalMessage = `O Gemini CLI encerrou com código de erro ${code}.`;
+      }
+
+      params.onEvent({
+        type: 'process_error',
+        data: {
+          exitCode: code,
+          stderr: stderrText,
+          message: finalMessage,
+        },
+      });
+    }
+
     activeChildProcess = null;
     params.onDone(code, signal);
   });

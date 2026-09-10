@@ -82,11 +82,19 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-1.5 mt-0.5">
               <span
                 className={`inline-block w-2 h-2 rounded-full ${
-                  isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
+                  !isConnected
+                    ? 'bg-rose-500'
+                    : !cliStatus?.authConfigured
+                    ? 'bg-amber-500 animate-pulse'
+                    : 'bg-emerald-500 animate-pulse'
                 }`}
               />
               <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                {isConnected ? 'Motor CLI Conectado' : 'CLI Indisponível'}
+                {!isConnected
+                  ? 'CLI Indisponível'
+                  : !cliStatus?.authConfigured
+                  ? 'CLI Conectado (Sem Chave)'
+                  : 'Motor CLI Conectado'}
               </span>
               <button
                 onClick={onRefreshStatus}

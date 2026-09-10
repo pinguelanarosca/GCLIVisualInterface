@@ -14,6 +14,7 @@ import {
   Check,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   Play,
   Save,
   Plus,
@@ -53,6 +54,7 @@ interface SettingsModalProps {
   onUpdateAudioSettings: (updates: Partial<AudioSettings>) => void;
   approvalMode: 'default' | 'auto_edit' | 'yolo' | 'plan';
   onChangeApprovalMode: (mode: 'default' | 'auto_edit' | 'yolo' | 'plan') => void;
+  onRefreshStatus?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -75,8 +77,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateAudioSettings,
   approvalMode,
   onChangeApprovalMode,
+  onRefreshStatus,
 }) => {
   const [activeTab, setActiveTab] = useState<string>(initialTab);
+
+  // API Key management
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const [apiKeyStatus, setApiKeyStatus] = useState<{ success?: boolean; text?: string } | null>(null);
+
+  const handleSaveApiKey = async () => {
+    if (!apiKeyInput.trim()) return;
+    setIsSavingKey(true);
+    setApiKeyStatus(null);
+    try {
+      const res = await fetch('/api/config/api-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: apiKeyInput.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setApiKeyStatus({ success: true, text: 'Chave GEMINI_API_KEY configurada com sucesso!' });
+        setApiKeyInput('');
+        if (onRefreshStatus) {
+          onRefreshStatus();
+        }
+      } else {
+        setApiKeyStatus({ success: false, text: data.error || 'Falha ao salvar a chave.' });
+      }
+    } catch (err: any) {
+      setApiKeyStatus({ success: false, text: err.message });
+    } finally {
+      setIsSavingKey(false);
+    }
+  };
 
   // Validation Matrix State
   const [matrix, setMatrix] = useState<ValidationItem[]>([]);
@@ -246,11 +282,80 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">Autenticação de Ambiente:</span>
-                    <span className="font-mono text-zinc-600 dark:text-zinc-300">
-                      {cliStatus?.authConfigured ? 'GEMINI_API_KEY Presente' : 'Autenticado no Ambiente'}
-                    </span>
+                    <span className="text-zinc-500">Autenticação:</span>
+                    {cliStatus?.authConfigured ? (
+                      <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="w-4 h-4" /> GEMINI_API_KEY Configurada
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
+                        <AlertCircle className="w-4 h-4" /> Chave Ausente / Não detectada
+                      </span>
+                    )}
                   </div>
+                </div>
+
+                {/* API Key Configuration Card */}
+                <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/90 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h5 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                        <span>Configurar GEMINI_API_KEY</span>
+                        {cliStatus?.authConfigured && (
+                          <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-normal">
+                            Ativa
+                          </span>
+                        )}
+                      </h5>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        Insira sua chave de API para salvá-la no ambiente da aplicação.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={apiKeyInput}
+                        onChange={(e) => setApiKeyInput(e.target.value)}
+                        placeholder="AIzaSy..."
+                        className="w-full px-3 py-2 text-xs font-mono rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 outline-none pr-14"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 px-1.5 py-0.5 rounded transition"
+                      >
+                        {showApiKey ? 'Ocultar' : 'Ver'}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveApiKey}
+                      disabled={isSavingKey || !apiKeyInput.trim()}
+                      className="px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white transition flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+                    >
+                      {isSavingKey ? 'Salvando...' : 'Salvar Chave'}
+                    </button>
+                  </div>
+
+                  {apiKeyStatus && (
+                    <p
+                      className={`text-[11px] flex items-center gap-1.5 ${
+                        apiKeyStatus.success
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-rose-600 dark:text-rose-400'
+                      }`}
+                    >
+                      {apiKeyStatus.success ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                      {apiKeyStatus.text}
+                    </p>
+                  )}
+
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                    💡 <em>Alternativa no Ubuntu:</em> Você também pode definir a chave antes de rodar o aplicativo com o comando: <code className="bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">export GEMINI_API_KEY="sua_chave"</code> ou adicioná-la no arquivo <code className="bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">.env</code> na pasta do app.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
