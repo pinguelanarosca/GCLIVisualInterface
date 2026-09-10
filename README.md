@@ -54,6 +54,8 @@ Os arquivos gerados serão salvos em `dist-ubuntu/`:
 
 ---
 
+---
+
 ## 📂 Estrutura do Projeto
 
 ```
@@ -67,6 +69,27 @@ Os arquivos gerados serão salvos em `dist-ubuntu/`:
 ├── server.ts               # Servidor Express com integração Vite
 └── package.json            # Dependências e scripts do projeto
 ```
+
+---
+
+## 🔍 Soluções de Problemas Comuns
+
+### 1. Erro `run_shell_command não encontrada` (Diretório Não Confiável)
+Por motivos de segurança, o Gemini CLI desabilita ferramentas de execução de shell (`run_shell_command`) se o diretório do projeto não for expressamente confiável no seu ambiente local.
+- **Como corrigir permanentemente**:
+  Defina a variável de ambiente no seu terminal ou arquivo `.env`:
+  ```bash
+  export GEMINI_CLI_TRUST_WORKSPACE=true
+  ```
+  Ou execute o Gemini CLI uma vez interativamente no terminal e digite `yes` para confiar no diretório:
+  ```bash
+  npx gemini
+  ```
+
+### 2. Erro de Sessão / Código `42` (`Erro ao retomar a sessão`)
+Isso ocorre quando a interface tenta retomar uma sessão existente no histórico, mas os arquivos temporários correspondentes foram limpos ou não existem no ambiente local atual.
+- **Como corrigir**:
+  Nossa interface possui tratamento automático para este caso. Se ocorrer erro de sessão inexistente (Código `42`), o sistema automaticamente reinicia um novo ID de sessão limpo e transparente sem travar seu chat.
 
 ---
 

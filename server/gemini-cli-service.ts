@@ -374,7 +374,7 @@ export function executeGeminiCli(params: CliExecutionParams, isRetry = false): {
     cwd = process.cwd();
   }
 
-  const shouldResume = params.sessionId ? (params.resume || isRetry || isExistingSession(params.sessionId)) : false;
+  const shouldResume = params.sessionId ? (isExistingSession(params.sessionId) || isRetry) : false;
   let finalPrompt = params.prompt;
 
   // For new sessions, prepend explicit workspace and directory context so the model knows its working directory
@@ -405,7 +405,6 @@ export function executeGeminiCli(params: CliExecutionParams, isRetry = false): {
   }
 
   if (params.sessionId) {
-    const shouldResume = params.resume || isRetry || isExistingSession(params.sessionId);
     if (shouldResume) {
       args.push('-r', params.sessionId);
     } else {
@@ -500,17 +499,23 @@ export function executeGeminiCli(params: CliExecutionParams, isRetry = false): {
   });
 
   child.on('close', (code, signal) => {
-    // If Gemini CLI exited with code 42 due to session collision, auto-retry with resume
-    if (
-      code === 42 &&
-      (stderrText.includes('already exists') || stderrText.includes('--resume') || stderrText.includes('Session ID')) &&
-      params.sessionId &&
-      !isRetry
-    ) {
-      knownSessions.add(params.sessionId);
-      activeChildProcess = null;
-      executeGeminiCli({ ...params, resume: true }, true);
-      return;
+    // If Gemini CLI exited with code 42 due to session collision/missing session, auto-retry with correct params
+    if (code === 42 && params.sessionId && !isRetry) {
+      const isMissingSession = stderrText.includes('No previous sessions found') || 
+                               stderrText.includes('no previous session') || 
+                               stderrText.includes('not found') || 
+                               stderrText.includes('Erro ao retomar a sessão');
+      if (isMissingSession) {
+        knownSessions.delete(params.sessionId);
+        activeChildProcess = null;
+        executeGeminiCli({ ...params, resume: false }, true);
+        return;
+      } else {
+        knownSessions.add(params.sessionId);
+        activeChildProcess = null;
+        executeGeminiCli({ ...params, resume: true }, true);
+        return;
+      }
     }
 
     if (buffer.trim()) {

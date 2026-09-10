@@ -234,16 +234,35 @@ export function App() {
       }
     }
 
+    const currentAgent =
+      (agents && agents.length > 0 ? (agents.find((a) => a.id === selectedAgentId) || agents[0]) : null) ||
+      DEFAULT_AGENTS[0];
+
+    const startTime = Date.now();
+    const workDir = activeProject?.associatedDirs[0] || authorizedDirs[0]?.path || '/workspace';
+    const rawPayloadSent = {
+      cliExecutable: cliStatus?.cliPath || 'gemini',
+      model: currentAgent?.model || 'gemini-3.5-flash-lite',
+      agentName: currentAgent?.displayName || 'Principal Orchestrator',
+      approvalMode,
+      workDir,
+      authorizedDirs: authorizedDirs.map((d) => d.path),
+      systemInstructions: currentAgent?.systemInstructions,
+      projectContext: activeProject ? `Projeto: ${activeProject.name}` : workDir,
+      promptText,
+      fullInjectedPrompt: `[SISTEMA - INSTRUÇÕES DO AGENTE]\n${currentAgent?.systemInstructions || ''}\n\n[CONTEXTO DE TRABALHO]\nWorkDir: ${workDir}\nModo Aprovação: ${approvalMode}\n\n[PROMPT ENVIADO]\n${promptText}`,
+      skills: skills.filter((s) => s.enabled).map((s) => s.name),
+      mcpServers: mcpServers.filter((m) => m.enabled).map((m) => m.name),
+      timestamp: new Date().toISOString(),
+    };
+
     const userMsg: ChatMessage = {
       id: `msg_${Date.now()}`,
       role: 'user',
       content: promptText,
       timestamp: new Date().toISOString(),
+      rawPayloadSent,
     };
-
-    const currentAgent =
-      (agents && agents.length > 0 ? (agents.find((a) => a.id === selectedAgentId) || agents[0]) : null) ||
-      DEFAULT_AGENTS[0];
 
     const assistantMsgId = `asst_${Date.now() + 1}`;
     const assistantPlaceholder: ChatMessage = {
@@ -255,11 +274,14 @@ export function App() {
       agentName: currentAgent?.displayName || 'Principal Orchestrator',
       toolCalls: [],
       isStreaming: true,
+      rawPayloadSent,
     };
 
     const updatedMessages = [...activeBaseMessages, userMsg, assistantPlaceholder];
     setMessages(updatedMessages);
     setIsStreaming(true);
+
+    const rawEventsList: any[] = [];
 
     try {
       const response = await fetch('/api/cli/execute', {
@@ -272,7 +294,7 @@ export function App() {
           authorizedDirs: authorizedDirs.map((d) => d.path),
           sessionId: currentSessionId,
           resume: messages.length > 0,
-          workDir: activeProject?.associatedDirs[0] || authorizedDirs[0]?.path || undefined,
+          workDir,
         }),
       });
 
@@ -304,6 +326,7 @@ export function App() {
 
             try {
               const eventPayload = JSON.parse(rawData);
+              rawEventsList.push(eventPayload);
 
               // Inspect Gemini CLI JSON stream event
               if (
@@ -382,13 +405,30 @@ export function App() {
         }
       }
 
-      // Compute final message content
+      // Compute final message content & token stats
       let finalContent = assistantContent.trim();
       if (hasError && !finalContent) {
         finalContent = `⚠️ **Erro na Execução do Gemini CLI**\n\n${errorMessage || 'O processo do Gemini CLI falhou.'}\n\n💡 **Verificação de Ambiente:**\n- Certifique-se de que a variável de ambiente \`GEMINI_API_KEY\` está definida no ambiente;\n- Você pode testar a conectividade em tempo real abrindo as **Configurações** (ícone de engrenagem) e clicando em **Testar Conexão com a API**.`;
       } else if (!finalContent) {
         finalContent = '⚠️ Nenhuma resposta gerada pelo modelo. Verifique o status da API no painel de Configurações.';
       }
+
+      const durationMs = Date.now() - startTime;
+      const inputTokens = Math.ceil((promptText.length + (currentAgent?.systemInstructions?.length || 0)) / 4);
+      const outputTokens = Math.ceil(finalContent.length / 4);
+
+      const rawPayloadReceived = {
+        rawEvents: rawEventsList,
+        rawTextStream: finalContent,
+        toolCalls: Object.values(toolCalls),
+        tokenStats: {
+          inputTokens,
+          outputTokens,
+          totalTokens: inputTokens + outputTokens,
+        },
+        durationMs,
+        completedAt: new Date().toISOString(),
+      };
 
       // Finalize message
       setMessages((prev) =>
@@ -399,21 +439,22 @@ export function App() {
                 content: finalContent,
                 toolCalls: Object.values(toolCalls),
                 isStreaming: false,
+                rawPayloadReceived,
               }
             : m
         )
       );
 
       // Save session
-      const finalMsgList = messages.concat([
-        userMsg,
-        {
-          ...assistantPlaceholder,
-          content: finalContent,
-          toolCalls: Object.values(toolCalls),
-          isStreaming: false,
-        },
-      ]);
+      const finalAssistantMsg: ChatMessage = {
+        ...assistantPlaceholder,
+        content: finalContent,
+        toolCalls: Object.values(toolCalls),
+        isStreaming: false,
+        rawPayloadReceived,
+      };
+
+      const finalMsgList = activeBaseMessages.concat([userMsg, finalAssistantMsg]);
 
       const title =
         promptText.length > 40 ? promptText.slice(0, 40) + '...' : promptText;
@@ -826,6 +867,10 @@ export function App() {
               approvalMode={approvalMode}
               cliStatus={cliStatus}
               onOpenSettings={handleOpenSettings}
+              activeProject={activeProject}
+              authorizedDirs={authorizedDirs}
+              skills={skills}
+              mcpServers={mcpServers}
             />
           ) : (
             <FilesAndDiffsView

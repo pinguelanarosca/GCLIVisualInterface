@@ -20,9 +20,13 @@ import {
   AlertTriangle,
   Loader2,
   Sliders,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
-import { ChatMessage, ToolCallStep, CommandConfig, AgentConfig } from '../types.js';
+import { ChatMessage, ToolCallStep, CommandConfig, AgentConfig, ProjectItem, AuthorizedDir, SkillConfig, McpConfig } from '../types.js';
 import { DEFAULT_AGENTS } from '../constants/defaultAgents.js';
+import { RawPayloadViewer } from './RawPayloadViewer.js';
+import { getRawInspectionData } from '../utils/rawPayloadUtils.js';
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -40,6 +44,10 @@ interface ChatViewProps {
   approvalMode: 'default' | 'auto_edit' | 'yolo' | 'plan';
   cliStatus?: import('../types.js').CliStatus | null;
   onOpenSettings?: (tab?: string) => void;
+  activeProject?: ProjectItem | null;
+  authorizedDirs?: AuthorizedDir[];
+  skills?: SkillConfig[];
+  mcpServers?: McpConfig[];
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -58,12 +66,20 @@ export const ChatView: React.FC<ChatViewProps> = ({
   approvalMode,
   cliStatus,
   onOpenSettings,
+  activeProject = null,
+  authorizedDirs = [],
+  skills = [],
+  mcpServers = [],
 }) => {
   const [inputText, setInputText] = useState('');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [expandedToolCalls, setExpandedToolCalls] = useState<Record<string, boolean>>({});
   const [showCommandsPopup, setShowCommandsPopup] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
+
+  // Raw Payload Inspection State ("Mostrar Oculto / Olho")
+  const [showRawPayloadGlobal, setShowRawPayloadGlobal] = useState<boolean>(false);
+  const [expandedRawMessageIds, setExpandedRawMessageIds] = useState<Record<string, boolean>>({});
 
   // Audio Recording State for STT
   const [isRecording, setIsRecording] = useState(false);
@@ -221,6 +237,36 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50/50 dark:bg-zinc-950/40 relative">
+      {/* Top Controls Bar with "Mostrar Oculto" (Eye Icon Button) */}
+      <div className="px-4 py-2 bg-white/90 dark:bg-zinc-900/90 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-3 text-xs shrink-0 shadow-xs z-10">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowRawPayloadGlobal(!showRawPayloadGlobal)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition cursor-pointer border ${
+              showRawPayloadGlobal
+                ? 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/50 shadow-xs'
+                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+            }`}
+            title="Clique para habilitar visualização de payloads brutos (Tudo que foi enviado e retornado do modelo do 1º ao último token)"
+          >
+            {showRawPayloadGlobal ? <Eye className="w-4 h-4 text-amber-500" /> : <EyeOff className="w-4 h-4" />}
+            <span className="font-semibold">
+              {showRawPayloadGlobal ? 'Mostrar Oculto: ATIVADO' : 'Mostrar Oculto (Ver Payloads Brutos)'}
+            </span>
+          </button>
+
+          <span className="text-[11px] text-zinc-500 hidden sm:inline">
+            {showRawPayloadGlobal
+              ? '👁️ Exibindo system prompt, contexto de workspace, SSE tokens e logs brutos de execução.'
+              : 'Clique no botão do olho para inspecionar requisição e resposta completas do modelo.'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 font-mono text-[11px] text-zinc-500">
+          <span>Agente: <strong className="text-zinc-800 dark:text-zinc-200">{currentAgent?.displayName}</strong></span>
+        </div>
+      </div>
+
       {/* Missing or Invalid API Key Alert Banner */}
       {cliStatus && (!cliStatus.authConfigured || cliStatus.apiValid === false) && (
         <div className="mx-4 md:mx-8 mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-200 shadow-xs shrink-0">
@@ -286,6 +332,16 @@ export const ChatView: React.FC<ChatViewProps> = ({
           messages.map((msg) => {
             const isUser = msg.role === 'user';
             const isNarrating = currentlyNarratingId === msg.id;
+            const isRawExpanded = showRawPayloadGlobal || expandedRawMessageIds[msg.id];
+            const inspectionData = getRawInspectionData(
+              msg,
+              currentAgent,
+              activeProject,
+              authorizedDirs,
+              skills,
+              mcpServers,
+              approvalMode
+            );
 
             return (
               <div
@@ -305,20 +361,46 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-tl-none shadow-xs text-zinc-800 dark:text-zinc-200'
                   }`}
                 >
-                  {/* Assistant Header Info */}
-                  {!isUser && (
-                    <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-2 mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                          {msg.agentName || currentAgent?.displayName || 'Principal / Orchestrator'}
-                        </span>
+                  {/* Message Header Info */}
+                  <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-2 mb-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className={`font-semibold ${isUser ? 'text-blue-100' : 'text-zinc-900 dark:text-zinc-100'}`}>
+                        {isUser ? 'Usuário' : msg.agentName || currentAgent?.displayName || 'Principal Orchestrator'}
+                      </span>
+                      {!isUser && (
                         <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border border-zinc-200/60 dark:border-zinc-700/60">
                           {msg.model || currentAgent?.model || 'gemini-3.5-flash-lite'}
                         </span>
-                      </div>
+                      )}
+                    </div>
 
-                      <div className="flex items-center gap-1">
-                        {/* TTS Audio Narration Action */}
+                    <div className="flex items-center gap-1">
+                      {/* Individual Message Eye Button (Mostrar Oculto) */}
+                      <button
+                        onClick={() =>
+                          setExpandedRawMessageIds((prev) => ({
+                            ...prev,
+                            [msg.id]: !prev[msg.id],
+                          }))
+                        }
+                        title={
+                          isRawExpanded
+                            ? 'Ocultar payload bruto desta mensagem'
+                            : 'Mostrar tudo que foi enviado e recebido do modelo nesta mensagem (Eye)'
+                        }
+                        className={`p-1.5 rounded transition ${
+                          isRawExpanded
+                            ? 'bg-amber-500/20 text-amber-500 dark:text-amber-300 font-bold'
+                            : isUser
+                            ? 'text-blue-200 hover:text-white hover:bg-blue-500/50'
+                            : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                        }`}
+                      >
+                        {isRawExpanded ? <Eye className="w-3.5 h-3.5 text-amber-500" /> : <EyeOff className="w-3.5 h-3.5" />}
+                      </button>
+
+                      {/* TTS Audio Narration Action */}
+                      {!isUser && (
                         <button
                           onClick={() => {
                             if (isNarrating) {
@@ -337,22 +419,24 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           {isNarrating ? <Pause className="w-3.5 h-3.5 animate-pulse" /> : <Volume2 className="w-3.5 h-3.5" />}
                           <span>{isNarrating ? 'Pausar' : 'Ouvir'}</span>
                         </button>
+                      )}
 
-                        {/* Copy text */}
-                        <button
-                          onClick={() => handleCopy(msg.content, msg.id)}
-                          title="Copiar texto"
-                          className="p-1 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition"
-                        >
-                          {copiedMessageId === msg.id ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-500" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
+                      {/* Copy text */}
+                      <button
+                        onClick={() => handleCopy(msg.content, msg.id)}
+                        title="Copiar texto"
+                        className={`p-1 rounded transition ${
+                          isUser ? 'text-blue-200 hover:text-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200'
+                        }`}
+                      >
+                        {copiedMessageId === msg.id ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
                     </div>
-                  )}
+                  </div>
 
                   {/* Tool Invocations Accordion */}
                   {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
@@ -428,6 +512,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   >
                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
+
+                  {/* Raw Payload Inspection Viewer ("Mostrar Oculto / Olho") */}
+                  {isRawExpanded && (
+                    <RawPayloadViewer data={inspectionData} isUserMessage={isUser} />
+                  )}
                 </div>
               </div>
             );

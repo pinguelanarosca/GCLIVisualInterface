@@ -118,6 +118,28 @@ export interface ChatMessage {
   error?: string;
   audioUrl?: string;
   isNarrating?: boolean;
+  rawPayloadSent?: {
+    cliExecutable?: string;
+    model?: string;
+    agentName?: string;
+    approvalMode?: string;
+    workDir?: string;
+    authorizedDirs?: string[];
+    systemInstructions?: string;
+    projectContext?: string;
+    promptText?: string;
+    fullInjectedPrompt?: string;
+    skills?: string[];
+    mcpServers?: string[];
+    timestamp?: string;
+  };
+  rawPayloadReceived?: {
+    rawEvents?: any[];
+    rawTextStream?: string;
+    tokenStats?: { inputTokens: number; outputTokens: number; totalTokens: number };
+    durationMs?: number;
+    completedAt?: string;
+  };
 }
 
 export interface SessionItem {
