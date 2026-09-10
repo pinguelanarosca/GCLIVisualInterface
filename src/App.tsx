@@ -6,6 +6,14 @@ import { AuthorizedDirsModal } from './components/AuthorizedDirsModal.js';
 import { ProjectsModal } from './components/ProjectsModal.js';
 import { HistoryDrawer } from './components/HistoryDrawer.js';
 import { SettingsModal } from './components/SettingsModal.js';
+import { LeftSidebar } from './components/LeftSidebar.js';
+import {
+  ContextSettings,
+  DEFAULT_CONTEXT_SETTINGS,
+  estimateTokens,
+  calculateSessionTokens,
+  compressContextMessages,
+} from './utils/tokenUtils.js';
 import {
   CliStatus,
   ProjectItem,
@@ -28,6 +36,28 @@ export function App() {
   const [cliStatus, setCliStatus] = useState<CliStatus | null>(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [approvalMode, setApprovalMode] = useState<'default' | 'auto_edit' | 'yolo' | 'plan'>('default');
+
+  // Left Sidebar State
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(true);
+
+  // Context & Token Compression Settings
+  const [contextSettings, setContextSettings] = useState<ContextSettings>(DEFAULT_CONTEXT_SETTINGS);
+
+  // Live Metrics Logs: RPM, TPM, RPD
+  const [requestLog, setRequestLog] = useState<Array<{ timestamp: number; tokenCount: number }>>([
+    { timestamp: Date.now() - 5000, tokenCount: 18500 },
+  ]);
+
+  // Calculate live rate metrics
+  const now = Date.now();
+  const lastMinuteLog = requestLog.filter((r) => now - r.timestamp <= 60000);
+  const rpm = Math.max(1, lastMinuteLog.length);
+  const tpm = lastMinuteLog.reduce((acc, r) => acc + r.tokenCount, 0);
+  const rpd = Math.max(
+    1,
+    requestLog.filter((r) => new Date(r.timestamp).toDateString() === new Date(now).toDateString()).length
+  );
+  const liveMetrics = { rpm, tpm, rpd };
 
   // Navigation views
   const [activeView, setActiveView] = useState<'chat' | 'diffs'>('chat');
@@ -190,6 +220,20 @@ export function App() {
 
   // Handle execution of real Gemini CLI via SSE
   const handleSendMessage = async (promptText: string) => {
+    // Track request metric (RPM, TPM, RPD)
+    const promptTokens = estimateTokens(promptText);
+    setRequestLog((prev) => [...prev, { timestamp: Date.now(), tokenCount: promptTokens }]);
+
+    // Auto context compression check
+    let activeBaseMessages = messages;
+    if (contextSettings.autoCompress) {
+      const currentStats = calculateSessionTokens(messages);
+      if (currentStats.totalTokens >= contextSettings.compressionThresholdTokens) {
+        const { compressedMessages } = compressContextMessages(messages, contextSettings);
+        activeBaseMessages = compressedMessages;
+      }
+    }
+
     const userMsg: ChatMessage = {
       id: `msg_${Date.now()}`,
       role: 'user',
@@ -213,7 +257,7 @@ export function App() {
       isStreaming: true,
     };
 
-    const updatedMessages = [...messages, userMsg, assistantPlaceholder];
+    const updatedMessages = [...activeBaseMessages, userMsg, assistantPlaceholder];
     setMessages(updatedMessages);
     setIsStreaming(true);
 
@@ -734,37 +778,65 @@ export function App() {
         onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
         onRefreshStatus={refreshStatus}
         isCheckingStatus={isCheckingStatus}
+        messages={messages}
+        isStreaming={isStreaming}
+        authorizedDirs={authorizedDirs}
+        skills={skills}
+        mcpServers={mcpServers}
+        metrics={liveMetrics}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex overflow-hidden">
-        {activeView === 'chat' ? (
-          <ChatView
-            messages={messages}
-            isStreaming={isStreaming}
-            onSendMessage={handleSendMessage}
-            onCancelExecution={handleCancelExecution}
-            commands={commands}
-            agents={agents}
-            selectedAgentId={selectedAgentId}
-            onSelectAgent={setSelectedAgentId}
-            onPlayTts={handlePlayTts}
-            currentlyNarratingId={currentlyNarratingId}
-            onStopTts={handleStopTts}
-            onTranscribeAudio={handleTranscribeAudio}
-            approvalMode={approvalMode}
-            cliStatus={cliStatus}
-            onOpenSettings={handleOpenSettings}
-          />
-        ) : (
-          <FilesAndDiffsView
-            currentDir={filesViewDir || activeProject?.associatedDirs[0] || authorizedDirs[0]?.path || ''}
-            projects={projects}
-            activeProject={activeProject}
-            authorizedDirs={authorizedDirs}
-            onDirectoryChange={(newDir) => setFilesViewDir(newDir)}
-          />
-        )}
+      {/* Main Content Area with Left Sidebar */}
+      <main className="flex-1 flex overflow-hidden relative">
+        <LeftSidebar
+          isExpanded={isSidebarExpanded}
+          onToggleExpand={() => setIsSidebarExpanded(!isSidebarExpanded)}
+          sessions={sessions}
+          currentSessionId={currentSessionId}
+          onSelectSession={handleSelectSession}
+          onNewSession={handleNewSession}
+          onDeleteSession={handleDeleteSession}
+          projects={projects}
+          activeProject={activeProject}
+          onSelectProject={(p) => {
+            setActiveProject(p);
+            if (p.associatedDirs[0]) {
+              setFilesViewDir(p.associatedDirs[0]);
+            }
+          }}
+          onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
+          onOpenSettings={handleOpenSettings}
+        />
+
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {activeView === 'chat' ? (
+            <ChatView
+              messages={messages}
+              isStreaming={isStreaming}
+              onSendMessage={handleSendMessage}
+              onCancelExecution={handleCancelExecution}
+              commands={commands}
+              agents={agents}
+              selectedAgentId={selectedAgentId}
+              onSelectAgent={setSelectedAgentId}
+              onPlayTts={handlePlayTts}
+              currentlyNarratingId={currentlyNarratingId}
+              onStopTts={handleStopTts}
+              onTranscribeAudio={handleTranscribeAudio}
+              approvalMode={approvalMode}
+              cliStatus={cliStatus}
+              onOpenSettings={handleOpenSettings}
+            />
+          ) : (
+            <FilesAndDiffsView
+              currentDir={filesViewDir || activeProject?.associatedDirs[0] || authorizedDirs[0]?.path || ''}
+              projects={projects}
+              activeProject={activeProject}
+              authorizedDirs={authorizedDirs}
+              onDirectoryChange={(newDir) => setFilesViewDir(newDir)}
+            />
+          )}
+        </div>
       </main>
 
       {/* Authorized Directories Modal */}
@@ -835,6 +907,14 @@ export function App() {
         onChangeApprovalMode={setApprovalMode}
         onRefreshStatus={refreshStatus}
         onResetDefaultAgentsConfig={handleResetDefaultAgents}
+        messages={messages}
+        onUpdateMessages={(newMsgs) => setMessages(newMsgs)}
+        activeProject={activeProject}
+        authorizedDirs={authorizedDirs}
+        contextSettings={contextSettings}
+        onUpdateContextSettings={(updates) =>
+          setContextSettings((prev) => ({ ...prev, ...updates }))
+        }
       />
     </div>
   );

@@ -41,6 +41,9 @@ import { ModelSelectorModal } from './ModelSelectorModal.js';
 import { ModelCatalogView } from './ModelCatalogView.js';
 import { GitUpdaterView } from './GitUpdaterView.js';
 import { RealtimeLogsView } from './RealtimeLogsView.js';
+import { ContextSettingsView } from './ContextSettingsView.js';
+import { ContextSettings, DEFAULT_CONTEXT_SETTINGS } from '../utils/tokenUtils.js';
+import { ChatMessage, ProjectItem, AuthorizedDir } from '../types.js';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -64,6 +67,12 @@ interface SettingsModalProps {
   onChangeApprovalMode: (mode: 'default' | 'auto_edit' | 'yolo' | 'plan') => void;
   onRefreshStatus?: () => void;
   onResetDefaultAgentsConfig?: () => Promise<void>;
+  messages?: ChatMessage[];
+  onUpdateMessages?: (newMessages: ChatMessage[]) => void;
+  activeProject?: ProjectItem | null;
+  authorizedDirs?: AuthorizedDir[];
+  contextSettings?: ContextSettings;
+  onUpdateContextSettings?: (updates: Partial<ContextSettings>) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -88,6 +97,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onChangeApprovalMode,
   onRefreshStatus,
   onResetDefaultAgentsConfig,
+  messages = [],
+  onUpdateMessages = () => {},
+  activeProject = null,
+  authorizedDirs = [],
+  contextSettings = DEFAULT_CONTEXT_SETTINGS,
+  onUpdateContextSettings = () => {},
 }) => {
   const [activeTab, setActiveTab] = useState<string>(initialTab);
 
@@ -307,6 +322,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="w-56 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40 p-2 space-y-1 overflow-y-auto shrink-0">
             {[
               { id: 'cli', label: 'Gemini CLI', icon: Terminal },
+              { id: 'context', label: 'Contexto & Compressão', icon: Sparkles },
               { id: 'models', label: 'Modelos de Execução', icon: Cpu },
               { id: 'agents', label: 'Agentes (6)', icon: Bot },
               { id: 'skills', label: 'Skills (4)', icon: Sparkles },
@@ -1447,6 +1463,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* 11. ATUALIZAÇÃO DO APLICATIVO VIA GIT */}
             {activeTab === 'git_update' && (
               <GitUpdaterView onRefreshGlobalStatus={onRefreshStatus} />
+            )}
+
+            {/* CONTEXTO & COMPRESSÃO */}
+            {activeTab === 'context' && (
+              <ContextSettingsView
+                messages={messages}
+                onUpdateMessages={onUpdateMessages}
+                agent={agents?.find((a) => a.enabled) || agents?.[0]}
+                activeProject={activeProject}
+                authorizedDirs={authorizedDirs}
+                skills={skills}
+                mcpServers={mcpServers}
+                contextSettings={contextSettings}
+                onUpdateContextSettings={onUpdateContextSettings}
+              />
             )}
 
             {/* 12. LOGS DO SISTEMA EM TEMPO REAL */}

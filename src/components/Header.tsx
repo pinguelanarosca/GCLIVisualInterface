@@ -15,8 +15,9 @@ import {
   RefreshCw,
   Activity,
 } from 'lucide-react';
-import { CliStatus, ProjectItem, AgentConfig } from '../types.js';
+import { CliStatus, ProjectItem, AgentConfig, ChatMessage, AuthorizedDir, SkillConfig, McpConfig } from '../types.js';
 import { DEFAULT_AGENTS } from '../constants/defaultAgents.js';
+import { TokenMonitorBar } from './TokenMonitorBar.js';
 
 interface HeaderProps {
   cliStatus: CliStatus | null;
@@ -38,6 +39,12 @@ interface HeaderProps {
   onToggleTheme: () => void;
   onRefreshStatus: () => void;
   isCheckingStatus: boolean;
+  messages?: ChatMessage[];
+  isStreaming?: boolean;
+  authorizedDirs?: AuthorizedDir[];
+  skills?: SkillConfig[];
+  mcpServers?: McpConfig[];
+  metrics?: { rpm: number; tpm: number; rpd: number };
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -60,6 +67,12 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleTheme,
   onRefreshStatus,
   isCheckingStatus,
+  messages = [],
+  isStreaming = false,
+  authorizedDirs = [],
+  skills = [],
+  mcpServers = [],
+  metrics = { rpm: 1, tpm: 0, rpd: 1 },
 }) => {
   const isConnected = cliStatus?.available && cliStatus?.connectionState === 'connected';
 
@@ -142,28 +155,39 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="h-6 w-px bg-zinc-200 dark:border-zinc-800 mx-2" />
 
         {/* Project Selector */}
-        <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-800/80 p-1 rounded-lg border border-zinc-200/80 dark:border-zinc-700/60">
-          <FolderGit2 className="w-4 h-4 text-zinc-500 ml-1.5" />
-          <select
-            value={activeProject?.id || ''}
-            onChange={(e) => {
-              const p = projects.find((x) => x.id === e.target.value);
-              if (p) onSelectProject(p);
-            }}
-            className="bg-transparent text-xs font-medium text-zinc-800 dark:text-zinc-200 outline-none pr-2 cursor-pointer"
-          >
-            {projects.map((proj) => (
-              <option key={proj.id} value={proj.id} className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
-                {proj.name}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800/80 px-2 py-1 rounded-lg border border-zinc-200/80 dark:border-zinc-700/60">
+          <FolderGit2 className="w-4 h-4 text-blue-500 shrink-0" />
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1">
+              <select
+                value={activeProject?.id || ''}
+                onChange={(e) => {
+                  const p = projects.find((x) => x.id === e.target.value);
+                  if (p) onSelectProject(p);
+                }}
+                className="bg-transparent text-xs font-semibold text-zinc-800 dark:text-zinc-200 outline-none pr-1 cursor-pointer"
+              >
+                {projects.map((proj) => (
+                  <option key={proj.id} value={proj.id} className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
+                    {proj.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <span
+              onClick={onOpenProjectsModal}
+              title={`Diretório do projeto: ${activeProject?.associatedDirs?.[0] || 'Diretório Raiz'}`}
+              className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[150px] cursor-pointer hover:text-blue-500 hover:underline"
+            >
+              {activeProject?.associatedDirs?.[0] || 'Pasta Raiz'}
+            </span>
+          </div>
           <button
             onClick={onOpenProjectsModal}
-            title="Gerenciar Projetos"
-            className="text-[11px] px-2 py-0.5 rounded text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition"
+            title="Gerenciar Projetos e Alterar Diretorios"
+            className="text-[10px] font-medium px-2 py-0.5 rounded bg-zinc-200/60 dark:bg-zinc-700/60 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600 transition"
           >
-            Gerenciar
+            Editar
           </button>
         </div>
 
@@ -184,28 +208,43 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Center Nav Views */}
-      <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/60 p-1 rounded-xl border border-zinc-200 dark:border-zinc-800">
-        <button
-          onClick={() => onSelectView('chat')}
-          className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
-            activeView === 'chat'
-              ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm'
-              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-          }`}
-        >
-          Conversa & Terminal
-        </button>
-        <button
-          onClick={() => onSelectView('diffs')}
-          className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
-            activeView === 'diffs'
-              ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm'
-              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-          }`}
-        >
-          Arquivos & Diffs Reais
-        </button>
+      {/* Center Nav Views & Realtime Token Monitor */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/60 p-1 rounded-xl border border-zinc-200 dark:border-zinc-800">
+          <button
+            onClick={() => onSelectView('chat')}
+            className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
+              activeView === 'chat'
+                ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+            }`}
+          >
+            Conversa & Terminal
+          </button>
+          <button
+            onClick={() => onSelectView('diffs')}
+            className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
+              activeView === 'diffs'
+                ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+            }`}
+          >
+            Arquivos & Diffs
+          </button>
+        </div>
+
+        {/* Real-time Token & Rate Limits Monitor for Active Chat */}
+        <TokenMonitorBar
+          messages={messages}
+          isStreaming={isStreaming}
+          agent={agents?.find((a) => a.id === selectedAgentId) || agents?.[0]}
+          activeProject={activeProject}
+          authorizedDirs={authorizedDirs}
+          skills={skills}
+          mcpServers={mcpServers}
+          metrics={metrics}
+          onOpenContextSettings={() => onOpenSettings('context')}
+        />
       </div>
 
       {/* Right Controls */}

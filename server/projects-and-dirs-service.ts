@@ -34,6 +34,31 @@ function loadStore(): AppDataStore {
       const raw = fs.readFileSync(STORAGE_FILE, 'utf8');
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.projects)) {
+        // Sanitize projects to guarantee valid directories
+        parsed.projects = parsed.projects.map((proj: ProjectItem) => {
+          const validDirs = (proj.associatedDirs || [])
+            .map((d: string) => resolveLocalPath(d))
+            .filter((d: string) => fs.existsSync(d));
+
+          if (validDirs.length === 0) {
+            validDirs.push(process.cwd());
+          }
+          return {
+            ...proj,
+            associatedDirs: validDirs,
+          };
+        });
+
+        // Sanitize authorizedDirs
+        const validAuthDirs = (parsed.authorizedDirs || [])
+          .map((d: string) => resolveLocalPath(d))
+          .filter((d: string) => fs.existsSync(d));
+
+        if (validAuthDirs.length === 0) {
+          validAuthDirs.push(process.cwd());
+        }
+        parsed.authorizedDirs = validAuthDirs;
+
         return parsed;
       }
     } catch {

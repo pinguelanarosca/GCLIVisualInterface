@@ -368,8 +368,23 @@ export interface CliExecutionParams {
 
 export function executeGeminiCli(params: CliExecutionParams, isRetry = false): { cancel: () => void } {
   let cliPath = getResolvedCliPath();
+
+  let cwd = params.workDir || (params.authorizedDirs && params.authorizedDirs[0]) || process.cwd();
+  if (!cwd || !fs.existsSync(cwd)) {
+    cwd = process.cwd();
+  }
+
+  const shouldResume = params.sessionId ? (params.resume || isRetry || isExistingSession(params.sessionId)) : false;
+  let finalPrompt = params.prompt;
+
+  // For new sessions, prepend explicit workspace and directory context so the model knows its working directory
+  if (!shouldResume) {
+    const workspaceHeader = `[CONTEXTO DO PROJETO E WORKSPACE]\nVocê está executando dentro do diretório do projeto: "${cwd}".\nDiretórios autorizados do projeto: ${params.authorizedDirs && params.authorizedDirs.length > 0 ? params.authorizedDirs.join(', ') : cwd}.\nSempre inspecione e responda com base nos arquivos localizados neste diretório.\n---\n\n`;
+    finalPrompt = workspaceHeader + params.prompt;
+  }
+
   const args: string[] = [
-    '-p', params.prompt,
+    '-p', finalPrompt,
     '-o', 'stream-json',
     '--skip-trust',
   ];
@@ -397,11 +412,6 @@ export function executeGeminiCli(params: CliExecutionParams, isRetry = false): {
       args.push('--session-id', params.sessionId);
       knownSessions.add(params.sessionId);
     }
-  }
-
-  let cwd = params.workDir || (params.authorizedDirs && params.authorizedDirs[0]) || process.cwd();
-  if (!cwd || !fs.existsSync(cwd)) {
-    cwd = process.cwd();
   }
 
   if (!cliPath || (cliPath !== 'gemini' && !fs.existsSync(cliPath))) {
