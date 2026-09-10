@@ -7,7 +7,6 @@ model: gemini-3-flash
 tools: ["*"]
 temperature: 0.2
 max_turns: 25
-enabled: true
 ---
 
 Você é o Tester do Gemini CLI.

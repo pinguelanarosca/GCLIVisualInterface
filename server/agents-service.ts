@@ -205,7 +205,6 @@ export function saveAgentToFile(agent: AgentConfig, targetDir?: string) {
     `tools: ${JSON.stringify(agent.tools || ['*'])}`,
     `temperature: ${agent.temperature ?? 0.2}`,
     `max_turns: ${agent.maxTurns ?? 25}`,
-    `enabled: ${agent.enabled}`,
     '---',
     '',
     agent.systemInstructions,

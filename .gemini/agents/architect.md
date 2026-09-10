@@ -7,7 +7,6 @@ model: gemini-3.6-flash
 tools: ["*"]
 temperature: 0.2
 max_turns: 20
-enabled: true
 ---
 
 Você é o Architect do Gemini CLI.

@@ -7,7 +7,6 @@ model: gemini-3.8-flash
 tools: ["*"]
 temperature: 0.1
 max_turns: 20
-enabled: true
 ---
 
 Você é o Auditor do Gemini CLI.

@@ -7,7 +7,6 @@ model: gemini-3.1-flash-lite
 tools: ["*"]
 temperature: 0.2
 max_turns: 30
-enabled: true
 ---
 
 Você é o Worker do Gemini CLI.

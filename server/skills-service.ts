@@ -92,7 +92,6 @@ export function saveSkillToFile(skill: SkillConfig, targetDir?: string) {
     '---',
     `name: ${skill.name}`,
     `description: "${skill.description.replace(/"/g, '\\"')}"`,
-    `enabled: ${skill.enabled}`,
     '---',
     '',
     skill.content,
