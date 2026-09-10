@@ -273,7 +273,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 Centro de Configurações do Gemini CLI
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                Controle do motor Gemini CLI {cliStatus?.version ? `v${cliStatus.version}` : 'v0.59.0'}, modelos, agentes, skills, comandos, áudio e empacotamento
+                Controle do motor Gemini CLI {cliStatus?.version ? `v${cliStatus.version}` : ''}, modelos, agentes, skills, comandos, áudio e empacotamento
               </p>
             </div>
           </div>
@@ -350,25 +350,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">Estado da Conexão:</span>
-                    <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle2 className="w-4 h-4" /> Conectado e Operacional
-                    </span>
+                    <span className="text-zinc-500">Estado da Conexão CLI:</span>
+                    {cliStatus?.available && cliStatus?.connectionState === 'connected' ? (
+                      <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="w-4 h-4" /> Conectado e Operacional
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 font-semibold text-rose-600 dark:text-rose-400">
+                        <AlertCircle className="w-4 h-4" /> {cliStatus?.errorMessage || 'Indisponível'}
+                      </span>
+                    )}
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-zinc-500">Autenticação (Ambiente):</span>
                     {cliStatus?.authConfigured ? (
                       cliStatus.apiValid ? (
                         <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="w-4 h-4" /> GEMINI_API_KEY Validada ({cliStatus.latencyMs ?? 0}ms)
+                          <CheckCircle2 className="w-4 h-4" /> GEMINI_API_KEY Validada {cliStatus.latencyMs !== undefined ? `(${cliStatus.latencyMs}ms)` : ''}
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="w-4 h-4" /> GEMINI_API_KEY Configurada no Ambiente
+                        <span className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
+                          <AlertCircle className="w-4 h-4" /> Chave Configurada (Aviso na API)
                         </span>
                       )
                     ) : (
-                      <span className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
+                      <span className="flex items-center gap-1.5 font-semibold text-rose-600 dark:text-rose-400">
                         <AlertCircle className="w-4 h-4" /> Chave Ausente no Ambiente
                       </span>
                     )}
@@ -1101,7 +1107,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="space-y-6 max-w-2xl">
                 <div>
                   <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    Hooks no Gemini CLI {cliStatus?.version || '0.59.0'}
+                    Hooks no Gemini CLI {cliStatus?.version ? `v${cliStatus.version}` : ''}
                   </h4>
                   <p className="text-xs text-zinc-500 mt-1">
                     Status e suporte para migração e acionadores de eventos.
@@ -1114,7 +1120,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       gemini hooks migrate
                     </span>
                     <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
-                      Suportado no CLI {cliStatus?.version || '0.59.0'}
+                      Suportado no CLI {cliStatus?.version ? `v${cliStatus.version}` : ''}
                     </span>
                   </div>
                   <p className="text-zinc-500">

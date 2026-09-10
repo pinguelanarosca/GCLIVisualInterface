@@ -128,11 +128,23 @@ async function startServer() {
   app.post('/api/cli/update', async (req, res) => {
     try {
       const execAsync = promisify(exec);
-      // Remove and install fresh latest version of @google/gemini-cli
+      // Remove and install fresh latest version of @google/gemini-cli locally
       const { stdout, stderr } = await execAsync('npm install @google/gemini-cli@latest --no-audit --no-fund', {
         cwd: process.cwd(),
         timeout: 120000,
       });
+
+      // Also try global update if user environment runs global gemini
+      try {
+        await execAsync('npm install -g @google/gemini-cli@latest --no-audit --no-fund', {
+          timeout: 120000,
+        });
+      } catch (globalErr: any) {
+        console.warn('Aviso ao atualizar Gemini CLI globalmente:', globalErr?.message);
+      }
+
+      // Reset custom CLI path so system picks up the newly installed binary
+      setCustomCliPath('');
 
       const newStatus = await detectCliStatus(true);
       res.json({

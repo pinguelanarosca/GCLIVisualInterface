@@ -9,7 +9,7 @@ export function getSystemValidationMatrix(): ValidationItem[] {
       item: 'Gemini CLI Engine Integration',
       category: 'CORE',
       status: 'TESTED',
-      evidence: 'Binário @google/gemini-cli@0.59.0 executado via child_process spawn; versão 0.59.0 confirmada.',
+      evidence: 'Binário @google/gemini-cli executado via child_process spawn; versão detectada dinamicamente.',
       notes: 'Executa nativamente o processo CLI com flags -p, -o stream-json e --skip-trust.',
     },
     {
@@ -120,7 +120,7 @@ export function buildPackagingArtifacts(): {
   // 1. Desktop Entry
   const desktopEntry = `[Desktop Entry]
 Name=Gemini CLI GUI
-Comment=Interface Gráfica Local para o Gemini CLI 0.58.0
+Comment=Interface Gráfica Local para o Gemini CLI
 Exec=/usr/bin/gemini-gui
 Icon=gemini-gui
 Terminal=false
@@ -247,7 +247,7 @@ Este procedimento permite ao usuário final certificar que a instalação no Ubu
 ## 1. Verificação de Pré-requisitos
 - Execute no terminal:
   \`node --version\` (deve ser >= 18.0.0)
-  \`gemini --version\` (deve retornar >= 0.59.0)
+  \`gemini --version\` (deve retornar a versão instalada)
 - Para remover versão antiga e instalar a versão mais recente:
   \`npm uninstall -g @google/gemini-cli\`
   \`npm install -g @google/gemini-cli@latest\`
@@ -259,7 +259,7 @@ Este procedimento permite ao usuário final certificar que a instalação no Ubu
 - O navegador padrão abrirá automaticamente em \`http://localhost:3000\`.
 
 ## 3. Checklist de Validação Funcional
-1. [ ] **Status do CLI**: O cabeçalho deve exibir "Gemini CLI v0.59.0 Conectado" e status verde.
+1. [ ] **Status do CLI**: O cabeçalho deve exibir o status do Gemini CLI com indicador de versão e estado da conexão.
 2. [ ] **Chat Textual**: Envie a mensagem "Olá, teste de conexão". O Gemini responderá em streaming.
 3. [ ] **Ditado por Microfone**: Clique no ícone de microfone no campo de texto, fale uma frase e confirme que o texto é transcrito diretamente no campo.
 4. [ ] **Narração de Resposta**: Na resposta recebida, clique em "Ouvir" e confirme o áudio sintetizado.

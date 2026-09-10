@@ -272,17 +272,41 @@ export interface PerformGitUpdateOptions {
 export function scheduleServerRestart(delayMs: number = 1500) {
   sysLog.warn('SYSTEM', `Reinício programado do processo do servidor em ${delayMs}ms...`);
   setTimeout(() => {
-    sysLog.info('SYSTEM', 'Iniciando novo processo e encerrando o atual...');
-    
-    // Inicia um novo processo independente (detached) usando os mesmos argumentos
-    const child = spawn(process.argv[0], process.argv.slice(1), {
-      detached: true,
-      stdio: 'ignore'
-    });
-    
-    // Desvincula o processo filho para que o pai possa encerrar
-    child.unref();
-    
+    sysLog.info('SYSTEM', 'Iniciando processo de reinício automático...');
+    try {
+      const execPath = process.execPath;
+      const nodeArgs = [...process.execArgv, ...process.argv.slice(1)];
+      const cwd = process.cwd();
+      const env = { ...process.env };
+
+      // Script gerenciador temporário desvinculado (detached)
+      // Aguarda 1.2s para garantir que o processo pai encerre e libere a porta 3000,
+      // e em seguida spawna a nova instância do servidor.
+      const inlineScript = `
+        setTimeout(() => {
+          const { spawn } = require('child_process');
+          const child = spawn(${JSON.stringify(execPath)}, ${JSON.stringify(nodeArgs)}, {
+            cwd: ${JSON.stringify(cwd)},
+            detached: true,
+            stdio: 'inherit',
+            env: process.env
+          });
+          child.unref();
+        }, 1200);
+      `;
+
+      const launcher = spawn(execPath, ['-e', inlineScript], {
+        cwd,
+        detached: true,
+        stdio: 'ignore',
+        env,
+      });
+      launcher.unref();
+    } catch (err: any) {
+      sysLog.error('SYSTEM', `Erro ao agendar processo de reinício: ${err.message}`);
+    }
+
+    // Encerra o processo atual liberando a porta 3000
     process.exit(0);
   }, delayMs);
 }
