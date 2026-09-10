@@ -134,26 +134,36 @@ async function startServer() {
         timeout: 120000,
       });
 
-      // Also try global update if user environment runs global gemini
+      let globalNotice = '';
       try {
         await execAsync('npm install -g @google/gemini-cli@latest --no-audit --no-fund', {
           timeout: 120000,
         });
       } catch (globalErr: any) {
         console.warn('Aviso ao atualizar Gemini CLI globalmente:', globalErr?.message);
+        if (globalErr?.message?.includes('EACCES') || globalErr?.message?.includes('permission')) {
+          globalNotice = 'Atenção: A atualização global do sistema falhou por falta de permissão (EACCES). Para atualizar o CLI global do seu sistema Ubuntu, execute no terminal: "sudo npm install -g @google/gemini-cli@latest". O aplicativo utilizará a versão local do projeto.';
+        } else {
+          globalNotice = `Aviso ao atualizar CLI global: ${globalErr?.message || 'Permissão negada'}. O aplicativo utilizará a versão local do projeto.`;
+        }
       }
 
       // Reset custom CLI path so system picks up the newly installed binary
       setCustomCliPath('');
 
       const newStatus = await detectCliStatus(true);
+      if (globalNotice) {
+        newStatus.globalUpdateNotice = globalNotice;
+      }
+
       res.json({
         success: true,
         version: newStatus.version,
         status: newStatus,
+        globalNotice,
         stdout,
         stderr,
-        message: `Gemini CLI atualizado com sucesso para a versão ${newStatus.version}!`,
+        message: `Gemini CLI local atualizado com sucesso para v${newStatus.version}!`,
       });
     } catch (err: any) {
       console.error('Falha ao atualizar o CLI:', err);

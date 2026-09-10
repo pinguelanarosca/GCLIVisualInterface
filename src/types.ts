@@ -8,6 +8,11 @@ export interface CliStatus {
   available: boolean;
   version: string;
   cliPath: string;
+  localCliPath?: string;
+  localVersion?: string;
+  globalCliPath?: string;
+  globalVersion?: string;
+  globalUpdateNotice?: string;
   connectionState: 'connected' | 'error' | 'not_detected';
   authConfigured: boolean;
   maskedApiKey?: string;

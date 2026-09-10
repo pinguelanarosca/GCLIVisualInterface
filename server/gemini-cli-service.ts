@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from 'node:child_process';
+import { spawn, execSync, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -8,6 +8,57 @@ import { sysLog } from './logger-service.js';
 
 let activeChildProcess: ChildProcess | null = null;
 let currentCustomCliPath: string = '';
+
+export function getLocalCliPath(): string {
+  const localBin = path.resolve(process.cwd(), 'node_modules', '.bin', 'gemini');
+  if (fs.existsSync(localBin)) {
+    return localBin;
+  }
+  return '';
+}
+
+export function getGlobalCliPath(): string {
+  try {
+    const whichOut = execSync('which gemini', { encoding: 'utf-8' }).trim();
+    if (whichOut && fs.existsSync(whichOut) && !whichOut.includes('node_modules')) {
+      return whichOut;
+    }
+  } catch {}
+
+  const commonPaths = ['/usr/local/bin/gemini', '/usr/bin/gemini', '/bin/gemini'];
+  for (const p of commonPaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return 'gemini';
+}
+
+export function queryBinaryVersion(binPath: string): Promise<string> {
+  return new Promise((resolve) => {
+    if (!binPath) {
+      resolve('');
+      return;
+    }
+    try {
+      const child = spawn(binPath, ['--version'], {
+        env: { ...process.env, NO_COLOR: '1' },
+      });
+      let stdout = '';
+      child.stdout?.on('data', (d) => { stdout += d.toString(); });
+      child.on('close', (code) => {
+        if (code === 0 && stdout.trim()) {
+          resolve(stdout.trim());
+        } else {
+          resolve('');
+        }
+      });
+      child.on('error', () => resolve(''));
+    } catch {
+      resolve('');
+    }
+  });
+}
 
 let lastValidationCache: {
   timestamp: number;
@@ -164,6 +215,9 @@ export async function detectCliStatus(
   targetModel = 'gemini-3.1-flash-lite'
 ): Promise<CliStatus> {
   const cliPath = getResolvedCliPath();
+  const localCliPath = getLocalCliPath();
+  const globalCliPath = getGlobalCliPath();
+
   const rawApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY || '';
   const authConfigured = Boolean(rawApiKey);
   let maskedApiKey = undefined;
@@ -174,11 +228,24 @@ export async function detectCliStatus(
       maskedApiKey = '***';
     }
   }
-  const apiCheck = authConfigured ? await validateGeminiApiKey(forceFresh, targetModel) : {
-    configured: false,
-    valid: false,
-    message: 'Nenhuma GEMINI_API_KEY configurada no ambiente.',
-  };
+
+  const [localVersion, globalVersion, apiCheck] = await Promise.all([
+    queryBinaryVersion(localCliPath),
+    queryBinaryVersion(globalCliPath),
+    authConfigured ? validateGeminiApiKey(forceFresh, targetModel) : Promise.resolve<{
+      configured: boolean;
+      valid: boolean;
+      message: string;
+      modelTested?: string;
+      latencyMs?: number;
+    }>({
+      configured: false,
+      valid: false,
+      message: 'Nenhuma GEMINI_API_KEY configurada no ambiente.',
+      latencyMs: undefined,
+      modelTested: undefined,
+    }),
+  ]);
 
   return new Promise((resolve) => {
     try {
@@ -202,6 +269,10 @@ export async function detectCliStatus(
           available: false,
           version: 'Não detectado',
           cliPath,
+          localCliPath,
+          localVersion: localVersion || undefined,
+          globalCliPath,
+          globalVersion: globalVersion || undefined,
           connectionState: 'not_detected',
           authConfigured,
           maskedApiKey,
@@ -221,6 +292,10 @@ export async function detectCliStatus(
             available: true,
             version: stdout.trim(),
             cliPath,
+            localCliPath,
+            localVersion: localVersion || undefined,
+            globalCliPath,
+            globalVersion: globalVersion || undefined,
             connectionState: 'connected',
             authConfigured,
             maskedApiKey,
@@ -237,6 +312,10 @@ export async function detectCliStatus(
             available: false,
             version: 'Indisponível',
             cliPath,
+            localCliPath,
+            localVersion: localVersion || undefined,
+            globalCliPath,
+            globalVersion: globalVersion || undefined,
             connectionState: 'error',
             authConfigured,
             maskedApiKey,
@@ -255,6 +334,10 @@ export async function detectCliStatus(
         available: false,
         version: 'Falha',
         cliPath,
+        localCliPath,
+        localVersion: localVersion || undefined,
+        globalCliPath,
+        globalVersion: globalVersion || undefined,
         connectionState: 'error',
         authConfigured,
         maskedApiKey,

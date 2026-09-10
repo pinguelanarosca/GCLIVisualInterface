@@ -161,8 +161,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // CLI update & reinstall state
   const [isUpdatingCli, setIsUpdatingCli] = useState(false);
-  const [updateCliResult, setUpdateCliResult] = useState<{ success: boolean; message: string; version?: string } | null>(null);
+  const [updateCliResult, setUpdateCliResult] = useState<{ success: boolean; message: string; version?: string; globalNotice?: string } | null>(null);
   const [copiedCmd, setCopiedCmd] = useState(false);
+
+  const handleSelectCliPath = async (newPath: string) => {
+    try {
+      await fetch('/api/cli/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cliPath: newPath }),
+      });
+      if (onRefreshStatus) {
+        onRefreshStatus();
+      }
+    } catch (err) {
+      console.error('Falha ao alterar caminho do CLI:', err);
+    }
+  };
 
   const handleUpdateCli = async () => {
     setIsUpdatingCli(true);
@@ -177,6 +192,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             success: true,
             message: data.message || `Gemini CLI atualizado com sucesso para v${data.version}!`,
             version: data.version,
+            globalNotice: data.globalNotice,
           });
           if (onRefreshStatus) {
             onRefreshStatus();
@@ -337,19 +353,60 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">Versão Detectada:</span>
-                    <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">
-                      {cliStatus?.version || 'Detectando...'}
+                  <div className="flex justify-between items-center pb-2 border-b border-zinc-200/60 dark:border-zinc-700/50">
+                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">Executável Ativo em Uso:</span>
+                    <span className="font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                      {cliStatus?.cliPath || 'Auto'} ({cliStatus?.version ? `v${cliStatus.version}` : 'Detectando...'})
                     </span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">Caminho do Executável:</span>
-                    <span className="font-mono text-zinc-600 dark:text-zinc-300 truncate max-w-xs">
-                      {cliStatus?.cliPath || 'node_modules/.bin/gemini'}
-                    </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <div className="p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700/80 bg-white dark:bg-zinc-900 space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-zinc-700 dark:text-zinc-300">1. CLI Local do Projeto</span>
+                        <span className="font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                          {cliStatus?.localVersion ? `v${cliStatus.localVersion}` : 'Não detectado'}
+                        </span>
+                      </div>
+                      <p className="font-mono text-[10px] text-zinc-500 truncate" title={cliStatus?.localCliPath || 'node_modules/.bin/gemini'}>
+                        {cliStatus?.localCliPath || 'node_modules/.bin/gemini'}
+                      </p>
+                      {cliStatus?.localCliPath && (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectCliPath(cliStatus.localCliPath!)}
+                          disabled={cliStatus.cliPath === cliStatus.localCliPath}
+                          className="mt-1 text-[10px] px-2 py-0.5 rounded font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 transition disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                        >
+                          {cliStatus.cliPath === cliStatus.localCliPath ? '✓ Usando Este' : 'Ativar CLI Local'}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700/80 bg-white dark:bg-zinc-900 space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-zinc-700 dark:text-zinc-300">2. CLI Global do Sistema</span>
+                        <span className="font-mono text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                          {cliStatus?.globalVersion ? `v${cliStatus.globalVersion}` : 'Não detectado'}
+                        </span>
+                      </div>
+                      <p className="font-mono text-[10px] text-zinc-500 truncate" title={cliStatus?.globalCliPath || 'gemini (PATH)'}>
+                        {cliStatus?.globalCliPath || 'gemini (PATH)'}
+                      </p>
+                      {cliStatus?.globalCliPath && (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectCliPath(cliStatus.globalCliPath!)}
+                          disabled={cliStatus.cliPath === cliStatus.globalCliPath || cliStatus.cliPath === 'gemini'}
+                          className="mt-1 text-[10px] px-2 py-0.5 rounded font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 transition disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                        >
+                          {cliStatus.cliPath === cliStatus.globalCliPath || cliStatus.cliPath === 'gemini' ? '✓ Usando Este' : 'Ativar CLI Global'}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center">
+
+                  <div className="flex justify-between items-center pt-1">
                     <span className="text-zinc-500">Estado da Conexão CLI:</span>
                     {cliStatus?.available && cliStatus?.connectionState === 'connected' ? (
                       <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
@@ -508,24 +565,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
 
                   {updateCliResult && (
-                    <div
-                      className={`p-3 rounded-lg text-xs flex items-start gap-2.5 ${
-                        updateCliResult.success
-                          ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                          : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
-                      }`}
-                    >
-                      {updateCliResult.success ? (
-                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
-                      ) : (
-                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
-                      )}
-                      <div className="space-y-1">
-                        <p className="font-semibold">{updateCliResult.message}</p>
-                        {updateCliResult.version && (
-                          <p className="text-[11px] font-mono">Versão ativa: v{updateCliResult.version}</p>
+                    <div className="space-y-2">
+                      <div
+                        className={`p-3 rounded-lg text-xs flex items-start gap-2.5 ${
+                          updateCliResult.success
+                            ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                            : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                        }`}
+                      >
+                        {updateCliResult.success ? (
+                          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
                         )}
+                        <div className="space-y-1">
+                          <p className="font-semibold">{updateCliResult.message}</p>
+                          {updateCliResult.version && (
+                            <p className="text-[11px] font-mono">Versão ativa do app: v{updateCliResult.version}</p>
+                          )}
+                        </div>
                       </div>
+
+                      {updateCliResult.globalNotice && (
+                        <div className="p-3 rounded-lg text-xs bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 space-y-2">
+                          <div className="flex items-center gap-1.5 font-semibold">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                            <span>Atualização do CLI Global do Sistema (Ubuntu / Linux)</span>
+                          </div>
+                          <p className="text-[11px] leading-relaxed">{updateCliResult.globalNotice}</p>
+                          <div className="pt-1 flex items-center justify-between">
+                            <code className="font-mono text-[10px] bg-amber-100 dark:bg-amber-900/50 px-2 py-1 rounded text-amber-900 dark:text-amber-200">
+                              sudo npm install -g @google/gemini-cli@latest
+                            </code>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard('sudo npm install -g @google/gemini-cli@latest')}
+                              className="text-[10px] text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer font-semibold"
+                            >
+                              <Copy className="w-3 h-3" />
+                              {copiedCmd ? 'Copiado!' : 'Copiar Sudo'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
