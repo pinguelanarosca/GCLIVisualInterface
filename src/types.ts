@@ -132,6 +132,28 @@ export interface FileDiffItem {
   binary?: boolean;
 }
 
+export interface FileEntryItem {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  size?: number;
+  modifiedAt?: string;
+}
+
+export interface FilesAndDiffsResult {
+  currentDir: string;
+  parentDir?: string | null;
+  exists: boolean;
+  isGitRepo: boolean;
+  branch?: string;
+  gitStatus: string;
+  files: string[];
+  entries: FileEntryItem[];
+  diffs: FileDiffItem[];
+  authorizedDirs?: string[];
+  error?: string;
+}
+
 export interface AudioSettings {
   sttEnabled: boolean;
   sttModel: string; // 'gemini-3.5-transcribe' or 'browser-native'
@@ -232,7 +254,23 @@ export interface GitUpdateResult {
   updatedCommit?: string;
   logs: string[];
   requiresRestart?: boolean;
+  restarting?: boolean;
+  rebuilt?: boolean;
+  installedDeps?: boolean;
   error?: string;
+}
+
+export interface SystemRebuildResult {
+  success: boolean;
+  message: string;
+  logs: string[];
+  error?: string;
+}
+
+export interface SystemRestartResult {
+  success: boolean;
+  message: string;
+  delayMs?: number;
 }
 
 export type SystemLogLevel = 'info' | 'success' | 'warn' | 'error' | 'debug';
@@ -241,6 +279,7 @@ export type SystemLogCategory =
   | 'SERVER'
   | 'API'
   | 'GIT'
+  | 'PROJECT'
   | 'AGENT'
   | 'SKILL'
   | 'COMMAND'

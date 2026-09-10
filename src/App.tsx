@@ -36,6 +36,7 @@ export function App() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [activeProject, setActiveProject] = useState<ProjectItem | null>(null);
   const [authorizedDirs, setAuthorizedDirs] = useState<AuthorizedDir[]>([]);
+  const [filesViewDir, setFilesViewDir] = useState<string>('');
 
   // Agents, Skills, Commands, MCP
   const [agents, setAgents] = useState<AgentConfig[]>(DEFAULT_AGENTS);
@@ -741,7 +742,11 @@ export function App() {
           />
         ) : (
           <FilesAndDiffsView
-            currentDir={activeProject?.associatedDirs[0] || authorizedDirs[0]?.path || ''}
+            currentDir={filesViewDir || activeProject?.associatedDirs[0] || authorizedDirs[0]?.path || ''}
+            projects={projects}
+            activeProject={activeProject}
+            authorizedDirs={authorizedDirs}
+            onDirectoryChange={(newDir) => setFilesViewDir(newDir)}
           />
         )}
       </main>
@@ -761,10 +766,20 @@ export function App() {
         onClose={() => setIsProjectsModalOpen(false)}
         projects={projects}
         activeProject={activeProject}
-        onSelectProject={setActiveProject}
+        onSelectProject={(p) => {
+          setActiveProject(p);
+          if (p.associatedDirs[0]) {
+            setFilesViewDir(p.associatedDirs[0]);
+          }
+        }}
         onCreateProject={handleCreateProject}
         onUpdateProject={handleUpdateProject}
         onDeleteProject={handleDeleteProject}
+        authorizedDirs={authorizedDirs}
+        onInspectProjectDirs={(dir) => {
+          setFilesViewDir(dir);
+          setActiveView('diffs');
+        }}
       />
 
       {/* History Drawer */}

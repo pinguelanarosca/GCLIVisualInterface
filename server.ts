@@ -51,6 +51,8 @@ import {
   checkRemoteGitUpdates,
   performGitUpdate,
   generateManualUpdateCommands,
+  performRebuild,
+  scheduleServerRestart,
   DEFAULT_GIT_REPO_URL,
   DEFAULT_GIT_BRANCH,
 } from './server/git-updater-service.js';
@@ -445,7 +447,7 @@ async function startServer() {
     res.json(result);
   });
 
-  // 13. Git Application Updater
+  // 13. Git Application Updater & System Lifecycle
   app.get('/api/git/status', (req, res) => {
     const { repoUrl } = req.query;
     const status = getGitStatus(repoUrl as string);
@@ -459,13 +461,31 @@ async function startServer() {
   });
 
   app.post('/api/git/pull-update', (req, res) => {
-    const { repoUrl, branch, forceSync } = req.body || {};
-    const result = performGitUpdate(
-      repoUrl || DEFAULT_GIT_REPO_URL,
-      branch || DEFAULT_GIT_BRANCH,
-      Boolean(forceSync)
-    );
+    const { repoUrl, branch, forceSync, installDependencies, runBuild, restartServer } = req.body || {};
+    const result = performGitUpdate({
+      repoUrl: repoUrl || DEFAULT_GIT_REPO_URL,
+      branch: branch || DEFAULT_GIT_BRANCH,
+      forceSync: Boolean(forceSync),
+      installDependencies: installDependencies !== false,
+      runBuild: runBuild !== false,
+      restartServer: Boolean(restartServer),
+    });
     res.json(result);
+  });
+
+  app.post('/api/system/rebuild', (req, res) => {
+    const result = performRebuild();
+    res.json(result);
+  });
+
+  app.post('/api/system/restart', (req, res) => {
+    const delayMs = typeof req.body?.delayMs === 'number' ? req.body.delayMs : 1500;
+    scheduleServerRestart(delayMs);
+    res.json({
+      success: true,
+      message: `Reinício do servidor programado para execução em ${delayMs}ms.`,
+      delayMs,
+    });
   });
 
   app.get('/api/git/manual-commands', (req, res) => {

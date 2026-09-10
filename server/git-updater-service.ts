@@ -260,24 +260,116 @@ export async function checkRemoteGitUpdates(
   };
 }
 
-export function performGitUpdate(
-  repoUrl: string = DEFAULT_GIT_REPO_URL,
-  branch: string = DEFAULT_GIT_BRANCH,
-  forceSync: boolean = false
-): GitUpdateResult {
+export interface PerformGitUpdateOptions {
+  repoUrl?: string;
+  branch?: string;
+  forceSync?: boolean;
+  installDependencies?: boolean;
+  runBuild?: boolean;
+  restartServer?: boolean;
+}
+
+export function scheduleServerRestart(delayMs: number = 1500) {
+  sysLog.warn('SYSTEM', `Reinício programado do processo do servidor em ${delayMs}ms...`);
+  setTimeout(() => {
+    sysLog.info('SYSTEM', 'Encerrando processo para reinício automático (supervisor/PM2/systemd)...');
+    process.exit(0);
+  }, delayMs);
+}
+
+export function performRebuild(): { success: boolean; message: string; logs: string[]; error?: string } {
   const cwd = process.cwd();
-  const cleanRepoUrl = repoUrl.trim() || DEFAULT_GIT_REPO_URL;
-  const targetBranch = branch.trim() || DEFAULT_GIT_BRANCH;
   const logs: string[] = [];
 
-  const runCmd = (cmd: string, description: string) => {
+  sysLog.info('SYSTEM', 'Iniciando recompilação do projeto (npm run build)...');
+  logs.push('⚙️ [Build] Executando npm run build...');
+
+  try {
+    const res = spawnSync('npm run build', {
+      cwd,
+      shell: true,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 120000,
+    });
+
+    if (res.stdout && res.stdout.trim()) {
+      logs.push(`📤 stdout: ${res.stdout.trim()}`);
+    }
+    if (res.stderr && res.stderr.trim()) {
+      logs.push(`⚠️ stderr: ${res.stderr.trim()}`);
+    }
+
+    if (res.status !== 0 && res.status !== null) {
+      const err = res.stderr || res.stdout || 'Falha ao executar npm run build';
+      sysLog.error('SYSTEM', `Falha ao recompilar aplicação: ${err}`);
+      return {
+        success: false,
+        message: `Falha na compilação: ${err}`,
+        logs,
+        error: err,
+      };
+    }
+
+    sysLog.success('SYSTEM', 'Aplicação recompilada com sucesso (dist/ atualizado).');
+    logs.push('✅ Compilação concluída com sucesso!');
+    return {
+      success: true,
+      message: 'Aplicação recompilada com sucesso!',
+      logs,
+    };
+  } catch (err: any) {
+    sysLog.error('SYSTEM', `Erro ao recompilar aplicação: ${err.message}`);
+    return {
+      success: false,
+      message: `Erro na compilação: ${err.message}`,
+      logs: [...logs, `❌ Erro: ${err.message}`],
+      error: err.message,
+    };
+  }
+}
+
+export function performGitUpdate(
+  optionsOrRepoUrl: PerformGitUpdateOptions | string = DEFAULT_GIT_REPO_URL,
+  maybeBranch: string = DEFAULT_GIT_BRANCH,
+  maybeForceSync: boolean = false
+): GitUpdateResult {
+  let options: PerformGitUpdateOptions;
+  if (typeof optionsOrRepoUrl === 'string') {
+    options = {
+      repoUrl: optionsOrRepoUrl,
+      branch: maybeBranch,
+      forceSync: maybeForceSync,
+      installDependencies: true,
+      runBuild: true,
+      restartServer: false,
+    };
+  } else {
+    options = {
+      installDependencies: true,
+      runBuild: true,
+      restartServer: false,
+      ...optionsOrRepoUrl,
+    };
+  }
+
+  const cwd = process.cwd();
+  const cleanRepoUrl = (options.repoUrl || '').trim() || DEFAULT_GIT_REPO_URL;
+  const targetBranch = (options.branch || '').trim() || DEFAULT_GIT_BRANCH;
+  const forceSync = Boolean(options.forceSync);
+  const shouldInstallDeps = options.installDependencies !== false;
+  const shouldBuild = options.runBuild !== false;
+  const shouldRestart = Boolean(options.restartServer);
+  const logs: string[] = [];
+
+  const runCmd = (cmd: string, description: string, timeoutMs: number = 60000) => {
     logs.push(`⚙️ [${description}] Executando: ${cmd}`);
     const res = spawnSync(cmd, {
       cwd,
       shell: true,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 45000,
+      timeout: timeoutMs,
     });
     if (res.stdout && res.stdout.trim()) {
       logs.push(`📤 stdout: ${res.stdout.trim()}`);
@@ -294,31 +386,29 @@ export function performGitUpdate(
   try {
     const status = getGitStatus(cleanRepoUrl);
 
-    // If not a git repo, initialize
+    // 1. Etapa Git: Fetch & Merge/Reset
     if (!status.isGitRepo) {
-      runCmd('git init', 'Inicializar repositório Git local');
-      runCmd(`git remote add origin "${cleanRepoUrl}" || git remote set-url origin "${cleanRepoUrl}"`, 'Configurar Remote Origin');
-      runCmd(`git fetch origin ${targetBranch}`, 'Buscar ramos remotos');
+      runCmd('git init', '1/4 Inicializar repositório Git local');
+      runCmd(`git remote add origin "${cleanRepoUrl}" || git remote set-url origin "${cleanRepoUrl}"`, '1/4 Configurar Remote Origin');
+      runCmd(`git fetch origin ${targetBranch}`, '1/4 Buscar ramos remotos');
       
-      // Try checkout or merge
       try {
-        runCmd(`git checkout -B ${targetBranch} origin/${targetBranch}`, 'Checkout do branch remoto');
+        runCmd(`git checkout -B ${targetBranch} origin/${targetBranch}`, '1/4 Checkout do branch remoto');
       } catch {
-        runCmd(`git reset --hard origin/${targetBranch}`, 'Reset para branch remota');
+        runCmd(`git reset --hard origin/${targetBranch}`, '1/4 Reset para branch remota');
       }
     } else {
-      // Is git repo
-      runCmd(`git remote set-url origin "${cleanRepoUrl}" || git remote add origin "${cleanRepoUrl}"`, 'Atualizar URL do Remote Origin');
-      runCmd(`git fetch origin ${targetBranch}`, 'Buscar atualizações remotas');
+      runCmd(`git remote set-url origin "${cleanRepoUrl}" || git remote add origin "${cleanRepoUrl}"`, '1/4 Atualizar URL do Remote Origin');
+      runCmd(`git fetch origin ${targetBranch}`, '1/4 Buscar atualizações remotas');
 
       if (forceSync) {
-        runCmd(`git reset --hard origin/${targetBranch}`, 'Sincronização forçada com o remoto');
+        runCmd(`git reset --hard origin/${targetBranch}`, '1/4 Sincronização forçada com o remoto');
       } else {
         try {
-          runCmd(`git merge origin/${targetBranch} -m "Merge update from ${cleanRepoUrl}"`, 'Mesclar atualizações');
-        } catch (mergeErr: any) {
+          runCmd(`git merge origin/${targetBranch} -m "Merge update from ${cleanRepoUrl}"`, '1/4 Mesclar atualizações');
+        } catch {
           logs.push(`⚠️ Conflito no merge detectado. Aplicando sincronização limpa do branch ${targetBranch}...`);
-          runCmd(`git reset --hard origin/${targetBranch}`, 'Reset forçado para versão mais recente');
+          runCmd(`git reset --hard origin/${targetBranch}`, '1/4 Reset forçado para versão mais recente');
         }
       }
     }
@@ -329,15 +419,63 @@ export function performGitUpdate(
       newCommit = execSync('git rev-parse HEAD', { cwd, encoding: 'utf-8' }).trim();
     } catch {}
 
-    logs.push(`✅ Aplicação sincronizada com sucesso para o commit ${newCommit ? newCommit.substring(0, 7) : 'recente'}!`);
-    sysLog.success('GIT', `Aplicação sincronizada via Git com sucesso para o commit ${newCommit ? newCommit.substring(0, 7) : 'recente'} (${targetBranch})`, { repoUrl: cleanRepoUrl });
+    logs.push(`✅ [1/4] Código fonte sincronizado com sucesso (Commit ${newCommit ? newCommit.substring(0, 7) : 'recente'})!`);
+
+    // 2. Etapa NPM Install: Se solicitado
+    let installedDeps = false;
+    if (shouldInstallDeps) {
+      try {
+        logs.push('📦 [2/4] Atualizando dependências (npm install)...');
+        runCmd('npm install --prefer-offline --no-audit', '2/4 Instalação de dependências npm', 120000);
+        installedDeps = true;
+        logs.push('✅ [2/4] Dependências npm verificadas/atualizadas com sucesso!');
+      } catch (depErr: any) {
+        logs.push(`⚠️ [2/4] Aviso ao rodar npm install: ${depErr.message}. Prosseguindo com o build...`);
+      }
+    }
+
+    // 3. Etapa Build: Recompilar Vite e backend bundle
+    let rebuilt = false;
+    if (shouldBuild) {
+      try {
+        logs.push('🛠️ [3/4] Recompilando frontend e backend (npm run build)...');
+        runCmd('npm run build', '3/4 Compilação do projeto', 120000);
+        rebuilt = true;
+        logs.push('✅ [3/4] Projeto recompilado com sucesso (dist/ atualizado)!');
+      } catch (buildErr: any) {
+        logs.push(`❌ [3/4] Falha ao recompilar projeto: ${buildErr.message}`);
+        throw buildErr;
+      }
+    }
+
+    // 4. Etapa Reinício: Se solicitado
+    if (shouldRestart) {
+      logs.push('🔄 [4/4] Reinício do servidor agendado em 1.5s...');
+      scheduleServerRestart(1500);
+    }
+
+    const summaryMsg = `Aplicação atualizada com sucesso para o commit ${newCommit ? newCommit.substring(0, 7) : 'recente'}!${
+      shouldRestart ? ' O servidor está reiniciando agora.' : ''
+    }`;
+
+    sysLog.success('GIT', summaryMsg, {
+      repoUrl: cleanRepoUrl,
+      branch: targetBranch,
+      commit: newCommit ? newCommit.substring(0, 7) : undefined,
+      rebuilt,
+      installedDeps,
+      restarting: shouldRestart,
+    });
 
     return {
       success: true,
-      message: `Aplicação atualizada com sucesso a partir de ${cleanRepoUrl} (${targetBranch})!`,
+      message: summaryMsg,
       updatedCommit: newCommit,
       logs,
-      requiresRestart: true,
+      requiresRestart: !shouldRestart,
+      restarting: shouldRestart,
+      rebuilt,
+      installedDeps,
     };
   } catch (err: any) {
     logs.push(`❌ Erro no processo de atualização: ${err.message}`);
