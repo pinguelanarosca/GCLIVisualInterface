@@ -10,6 +10,11 @@ export interface CliStatus {
   cliPath: string;
   connectionState: 'connected' | 'error' | 'not_detected';
   authConfigured: boolean;
+  apiValid?: boolean;
+  apiChecked?: boolean;
+  apiError?: string;
+  latencyMs?: number;
+  modelTested?: string;
   activeSessionId?: string;
   errorMessage?: string;
   approvalMode: 'default' | 'auto_edit' | 'yolo' | 'plan';
@@ -184,3 +189,49 @@ export interface ValidationItem {
   evidence: string;
   notes: string;
 }
+
+export interface GitCommitInfo {
+  sha: string;
+  shortSha: string;
+  message: string;
+  author: string;
+  date: string;
+  url?: string;
+}
+
+export interface GitAppStatus {
+  isGitRepo: boolean;
+  repoUrl: string;
+  branch: string;
+  currentCommit?: string;
+  currentCommitShort?: string;
+  commitMessage?: string;
+  commitDate?: string;
+  hasUncommittedChanges: boolean;
+  uncommittedFilesCount: number;
+  remoteUrl?: string;
+  gitAvailable: boolean;
+  gitVersion?: string;
+}
+
+export interface GitUpdateCheckResult {
+  hasUpdate: boolean;
+  localCommit?: string;
+  remoteCommit?: string;
+  remoteCommitShort?: string;
+  remoteCommitInfo?: GitCommitInfo;
+  branch: string;
+  repoUrl: string;
+  message: string;
+  error?: string;
+}
+
+export interface GitUpdateResult {
+  success: boolean;
+  message: string;
+  updatedCommit?: string;
+  logs: string[];
+  requiresRestart?: boolean;
+  error?: string;
+}
+

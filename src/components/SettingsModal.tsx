@@ -24,6 +24,8 @@ import {
   ShieldAlert,
   Sliders,
   Copy,
+  GitPullRequest,
+  GitBranch,
 } from 'lucide-react';
 import {
   CliStatus,
@@ -36,6 +38,7 @@ import {
 } from '../types.js';
 import { ModelSelectorModal } from './ModelSelectorModal.js';
 import { ModelCatalogView } from './ModelCatalogView.js';
+import { GitUpdaterView } from './GitUpdaterView.js';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -86,36 +89,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<string>(initialTab);
 
-  // API Key management
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [isSavingKey, setIsSavingKey] = useState(false);
-  const [apiKeyStatus, setApiKeyStatus] = useState<{ success?: boolean; text?: string } | null>(null);
+  // API Live Validation state
+  const [isValidatingApi, setIsValidatingApi] = useState(false);
+  const [apiValidationResult, setApiValidationResult] = useState<{
+    success: boolean;
+    message: string;
+    latencyMs?: number;
+    modelTested?: string;
+  } | null>(null);
 
-  const handleSaveApiKey = async () => {
-    if (!apiKeyInput.trim()) return;
-    setIsSavingKey(true);
-    setApiKeyStatus(null);
+  const handleTestApiConnection = async () => {
+    setIsValidatingApi(true);
+    setApiValidationResult(null);
     try {
-      const res = await fetch('/api/config/api-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: apiKeyInput.trim() }),
-      });
+      const res = await fetch('/api/api-key/validate');
       const data = await res.json();
-      if (data.success) {
-        setApiKeyStatus({ success: true, text: 'Chave GEMINI_API_KEY configurada com sucesso!' });
-        setApiKeyInput('');
-        if (onRefreshStatus) {
-          onRefreshStatus();
-        }
-      } else {
-        setApiKeyStatus({ success: false, text: data.error || 'Falha ao salvar a chave.' });
+      setApiValidationResult({
+        success: Boolean(data.valid),
+        message: data.message || (data.valid ? 'Conexão com a API validada com sucesso!' : 'Falha na validação com a API'),
+        latencyMs: data.latencyMs,
+        modelTested: data.modelTested,
+      });
+      if (onRefreshStatus) {
+        onRefreshStatus();
       }
     } catch (err: any) {
-      setApiKeyStatus({ success: false, text: err.message });
+      setApiValidationResult({
+        success: false,
+        message: err.message || 'Erro ao comunicar com o endpoint de validação',
+      });
     } finally {
-      setIsSavingKey(false);
+      setIsValidatingApi(false);
     }
   };
 
@@ -277,6 +281,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               { id: 'permissions', label: 'Permissões & Modos', icon: Shield },
               { id: 'audio', label: 'Áudio STT / TTS', icon: Volume2 },
               { id: 'packaging', label: 'Empacotamento & Status', icon: Package },
+              { id: 'git_update', label: 'Atualização (Git)', icon: GitPullRequest },
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -331,79 +336,116 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">Autenticação:</span>
+                    <span className="text-zinc-500">Autenticação (Ambiente):</span>
                     {cliStatus?.authConfigured ? (
-                      <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle2 className="w-4 h-4" /> GEMINI_API_KEY Configurada
-                      </span>
+                      cliStatus.apiValid ? (
+                        <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="w-4 h-4" /> GEMINI_API_KEY Validada ({cliStatus.latencyMs ?? 0}ms)
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="w-4 h-4" /> GEMINI_API_KEY Configurada no Ambiente
+                        </span>
+                      )
                     ) : (
                       <span className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
-                        <AlertCircle className="w-4 h-4" /> Chave Ausente / Não detectada
+                        <AlertCircle className="w-4 h-4" /> Chave Ausente no Ambiente
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* API Key Configuration Card */}
-                <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/90 shadow-xs space-y-3">
+                {/* API Environment Status & Live Validation Card */}
+                <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/90 shadow-xs space-y-3.5">
                   <div className="flex items-center justify-between">
                     <div>
                       <h5 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                        <span>Configurar GEMINI_API_KEY</span>
+                        <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <span>GEMINI_API_KEY (Variável de Ambiente)</span>
                         {cliStatus?.authConfigured && (
-                          <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-normal">
-                            Ativa
+                          <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-medium">
+                            {cliStatus.apiValid ? 'Validada & Ativa' : 'Detectada no Ambiente'}
                           </span>
                         )}
                       </h5>
                       <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                        Insira sua chave de API para salvá-la no ambiente da aplicação.
+                        A autenticação com o Google Gemini é carregada automaticamente a partir das variáveis de ambiente seguras do sistema.
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type={showApiKey ? 'text' : 'password'}
-                        value={apiKeyInput}
-                        onChange={(e) => setApiKeyInput(e.target.value)}
-                        placeholder="AIzaSy..."
-                        className="w-full px-3 py-2 text-xs font-mono rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 outline-none pr-14"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowApiKey(!showApiKey)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 px-1.5 py-0.5 rounded transition"
-                      >
-                        {showApiKey ? 'Ocultar' : 'Ver'}
-                      </button>
+                  <div className="bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded-lg border border-zinc-200/80 dark:border-zinc-700/60 space-y-2 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-500 dark:text-zinc-400">Origem da Credencial:</span>
+                      <span className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300 font-semibold">
+                        process.env.GEMINI_API_KEY
+                      </span>
                     </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-500 dark:text-zinc-400">Status Operacional:</span>
+                      <span className="font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        {cliStatus?.authConfigured ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            {cliStatus.apiValid ? 'Verificada e Operacional' : 'Configurada no Servidor'}
+                          </>
+                        ) : (
+                          <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            Defina GEMINI_API_KEY no ambiente
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    {cliStatus?.modelTested && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-zinc-500 dark:text-zinc-400">Modelo Testado:</span>
+                        <span className="font-mono text-[11px] text-zinc-600 dark:text-zinc-300">
+                          {cliStatus.modelTested}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
                     <button
                       type="button"
-                      onClick={handleSaveApiKey}
-                      disabled={isSavingKey || !apiKeyInput.trim()}
-                      className="px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white transition flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+                      onClick={handleTestApiConnection}
+                      disabled={isValidatingApi}
+                      className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white transition flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
                     >
-                      {isSavingKey ? 'Salvando...' : 'Salvar Chave'}
+                      <RefreshCw className={`w-3.5 h-3.5 ${isValidatingApi ? 'animate-spin' : ''}`} />
+                      {isValidatingApi ? 'Validando conexão com o Google Gemini...' : 'Testar Conexão com a API em Tempo Real'}
                     </button>
                   </div>
 
-                  {apiKeyStatus && (
-                    <p
-                      className={`text-[11px] flex items-center gap-1.5 ${
-                        apiKeyStatus.success
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : 'text-rose-600 dark:text-rose-400'
+                  {apiValidationResult && (
+                    <div
+                      className={`p-3 rounded-lg text-xs flex items-start gap-2.5 ${
+                        apiValidationResult.success
+                          ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                          : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
                       }`}
                     >
-                      {apiKeyStatus.success ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                      {apiKeyStatus.text}
-                    </p>
+                      {apiValidationResult.success ? (
+                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+                      )}
+                      <div>
+                        <p className="font-semibold">{apiValidationResult.message}</p>
+                        {apiValidationResult.latencyMs !== undefined && (
+                          <p className="text-[11px] opacity-80 mt-0.5">
+                            Latência de resposta da API: <strong>{apiValidationResult.latencyMs}ms</strong>
+                            {apiValidationResult.modelTested && ` • Modelo verificado: ${apiValidationResult.modelTested}`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   )}
 
-                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
-                    💡 <em>Alternativa no Ubuntu:</em> Você também pode definir a chave antes de rodar o aplicativo com o comando: <code className="bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">export GEMINI_API_KEY="sua_chave"</code> ou adicioná-la no arquivo <code className="bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">.env</code> na pasta do app.
+                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                    🔒 <strong>Segurança:</strong> A chave de API permanece estritamente no backend do servidor e nunca é trafegada para o cliente.
                   </p>
                 </div>
 
@@ -478,6 +520,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <p className="text-emerald-400">npm install -g @google/gemini-cli@latest</p>
                       <p className="text-zinc-500 pt-1"># 3. Confirmar a versão instalada no sistema:</p>
                       <p className="text-blue-400">gemini --version</p>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-between">
+                      <span className="text-[11px] text-zinc-500">Deseja atualizar o código da interface gráfica via Git?</span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('git_update')}
+                        className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <GitPullRequest className="w-3.5 h-3.5" />
+                        <span>Abrir Atualizador Git</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1272,6 +1326,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* 11. ATUALIZAÇÃO DO APLICATIVO VIA GIT */}
+            {activeTab === 'git_update' && (
+              <GitUpdaterView onRefreshGlobalStatus={onRefreshStatus} />
             )}
           </div>
         </div>

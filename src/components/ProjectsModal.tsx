@@ -50,7 +50,7 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
     await onCreateProject(
       name.trim(),
       description.trim(),
-      dirPath.trim() ? [dirPath.trim()] : [process.cwd()]
+      dirPath.trim() ? [dirPath.trim()] : []
     );
     setName('');
     setDescription('');

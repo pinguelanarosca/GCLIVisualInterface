@@ -215,7 +215,7 @@ export function App() {
           authorizedDirs: authorizedDirs.map((d) => d.path),
           sessionId: currentSessionId,
           resume: messages.length > 0,
-          workDir: activeProject?.associatedDirs[0] || process.cwd(),
+          workDir: activeProject?.associatedDirs[0] || authorizedDirs[0]?.path || undefined,
         }),
       });
 
@@ -282,7 +282,7 @@ export function App() {
                 // Check if this is an authentication error from stderr
                 if (text.includes('Please set an Auth method') || text.includes('GEMINI_API_KEY')) {
                   hasError = true;
-                  errorMessage = 'A chave GEMINI_API_KEY não foi encontrada no ambiente. Configure sua chave nas Configurações da GUI.';
+                  errorMessage = 'A variável de ambiente GEMINI_API_KEY não foi encontrada ou não está autorizada no ambiente do sistema.';
                 } else {
                   // Filter out cosmetic warnings from terminal
                   const isBenign =
@@ -324,9 +324,9 @@ export function App() {
       // Compute final message content
       let finalContent = assistantContent.trim();
       if (hasError && !finalContent) {
-        finalContent = `⚠️ **Erro na Execução do Gemini CLI**\n\n${errorMessage || 'O processo do Gemini CLI falhou.'}\n\n💡 **Como resolver:**\n1. Abra as **Configurações** (ícone de engrenagem no topo);\n2. Insira sua chave no campo **GEMINI_API_KEY** e clique em **Salvar Chave**;\n3. Ou no terminal Ubuntu, execute:\n   \`\`\`bash\n   export GEMINI_API_KEY="sua_chave_aqui"\n   \`\`\``;
+        finalContent = `⚠️ **Erro na Execução do Gemini CLI**\n\n${errorMessage || 'O processo do Gemini CLI falhou.'}\n\n💡 **Verificação de Ambiente:**\n- Certifique-se de que a variável de ambiente \`GEMINI_API_KEY\` está definida no ambiente;\n- Você pode testar a conectividade em tempo real abrindo as **Configurações** (ícone de engrenagem) e clicando em **Testar Conexão com a API**.`;
       } else if (!finalContent) {
-        finalContent = '⚠️ Nenhuma resposta gerada pelo modelo. Verifique se sua chave GEMINI_API_KEY está válida no menu de Configurações.';
+        finalContent = '⚠️ Nenhuma resposta gerada pelo modelo. Verifique o status da API no painel de Configurações.';
       }
 
       // Finalize message
@@ -741,7 +741,7 @@ export function App() {
           />
         ) : (
           <FilesAndDiffsView
-            currentDir={activeProject?.associatedDirs[0] || process.cwd()}
+            currentDir={activeProject?.associatedDirs[0] || authorizedDirs[0]?.path || ''}
           />
         )}
       </main>

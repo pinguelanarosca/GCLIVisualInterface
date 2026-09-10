@@ -221,13 +221,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50/50 dark:bg-zinc-950/40 relative">
-      {/* Missing API Key Alert Banner */}
-      {cliStatus && cliStatus.authConfigured === false && (
+      {/* Missing or Invalid API Key Alert Banner */}
+      {cliStatus && (!cliStatus.authConfigured || cliStatus.apiValid === false) && (
         <div className="mx-4 md:mx-8 mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-200 shadow-xs shrink-0">
           <div className="flex items-center gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
             <span>
-              <strong>Chave GEMINI_API_KEY ausente:</strong> Configure sua chave de API para que o Gemini CLI possa gerar respostas no seu ambiente.
+              {!cliStatus.authConfigured ? (
+                <>
+                  <strong>GEMINI_API_KEY não detectada:</strong> Defina a variável de ambiente <code>GEMINI_API_KEY</code> para que o Gemini CLI execute as requisições.
+                </>
+              ) : (
+                <>
+                  <strong>Alerta de API:</strong> A chave no ambiente apresentou erro na validação com o Google Gemini. {cliStatus.apiError ? `(${cliStatus.apiError})` : ''}
+                </>
+              )}
             </span>
           </div>
           {onOpenSettings && (
@@ -235,7 +243,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               onClick={() => onOpenSettings('cli')}
               className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition whitespace-nowrap cursor-pointer shadow-xs"
             >
-              Configurar Chave
+              Ver Status da API
             </button>
           )}
         </div>

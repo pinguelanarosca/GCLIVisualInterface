@@ -86,21 +86,30 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-rose-500'
                     : !cliStatus?.authConfigured
                     ? 'bg-amber-500 animate-pulse'
+                    : cliStatus?.apiValid === false
+                    ? 'bg-amber-500 animate-pulse'
                     : 'bg-emerald-500 animate-pulse'
                 }`}
               />
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
                 {!isConnected
                   ? 'CLI Indisponível'
                   : !cliStatus?.authConfigured
-                  ? 'CLI Conectado (Sem Chave)'
-                  : 'Motor CLI Conectado'}
+                  ? 'CLI Ativo (Sem Chave no Ambiente)'
+                  : cliStatus?.apiValid === false
+                  ? 'CLI Ativo (API Não Validada)'
+                  : 'Motor CLI & API Ativos'}
+                {cliStatus?.apiValid && cliStatus?.latencyMs !== undefined && (
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-500/10 px-1 py-0.2 rounded ml-0.5">
+                    {cliStatus.latencyMs}ms
+                  </span>
+                )}
               </span>
               <button
                 onClick={onRefreshStatus}
                 disabled={isCheckingStatus}
-                title="Recarregar status do CLI"
-                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1 transition"
+                title="Recarregar status do CLI e validar API"
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1 transition cursor-pointer"
               >
                 <RefreshCw className={`w-3 h-3 ${isCheckingStatus ? 'animate-spin' : ''}`} />
               </button>

@@ -26,7 +26,7 @@ for (const envFile of fallbackEnvPaths) {
     } catch {}
   }
 }
-import { detectCliStatus, executeGeminiCli, cancelActiveExecution, setCustomCliPath } from './server/gemini-cli-service.js';
+import { detectCliStatus, executeGeminiCli, cancelActiveExecution, setCustomCliPath, validateGeminiApiKey } from './server/gemini-cli-service.js';
 import { ensureAgentsSeeded, loadAgents, saveAgentToFile, deleteAgent, resetAllAgentsToDefault } from './server/agents-service.js';
 import { ensureSkillsSeeded, loadSkills, saveSkillToFile, deleteSkill } from './server/skills-service.js';
 import { ensureCommandsSeeded, loadCommands, saveCommandToFile, deleteCommand } from './server/commands-service.js';
@@ -46,6 +46,14 @@ import {
 } from './server/projects-and-dirs-service.js';
 import { checkAudioModelsAvailability, transcribeAudio, synthesizeSpeech } from './server/audio-service.js';
 import { getSystemValidationMatrix, buildPackagingArtifacts } from './server/packaging-service.js';
+import {
+  getGitStatus,
+  checkRemoteGitUpdates,
+  performGitUpdate,
+  generateManualUpdateCommands,
+  DEFAULT_GIT_REPO_URL,
+  DEFAULT_GIT_BRANCH,
+} from './server/git-updater-service.js';
 
 const PORT = 3000;
 
@@ -67,6 +75,11 @@ async function startServer() {
   app.get('/api/status', async (req, res) => {
     const status = await detectCliStatus();
     res.json(status);
+  });
+
+  app.get('/api/api-key/validate', async (req, res) => {
+    const result = await validateGeminiApiKey(true);
+    res.json(result);
   });
 
   app.post('/api/cli/config', (req, res) => {
@@ -387,6 +400,38 @@ async function startServer() {
   app.post('/api/packaging/build', (req, res) => {
     const result = buildPackagingArtifacts();
     res.json(result);
+  });
+
+  // 13. Git Application Updater
+  app.get('/api/git/status', (req, res) => {
+    const { repoUrl } = req.query;
+    const status = getGitStatus(repoUrl as string);
+    res.json(status);
+  });
+
+  app.post('/api/git/check-update', async (req, res) => {
+    const { repoUrl, branch } = req.body || {};
+    const result = await checkRemoteGitUpdates(repoUrl || DEFAULT_GIT_REPO_URL, branch || DEFAULT_GIT_BRANCH);
+    res.json(result);
+  });
+
+  app.post('/api/git/pull-update', (req, res) => {
+    const { repoUrl, branch, forceSync } = req.body || {};
+    const result = performGitUpdate(
+      repoUrl || DEFAULT_GIT_REPO_URL,
+      branch || DEFAULT_GIT_BRANCH,
+      Boolean(forceSync)
+    );
+    res.json(result);
+  });
+
+  app.get('/api/git/manual-commands', (req, res) => {
+    const { repoUrl, branch } = req.query;
+    const cmds = generateManualUpdateCommands(
+      (repoUrl as string) || DEFAULT_GIT_REPO_URL,
+      (branch as string) || DEFAULT_GIT_BRANCH
+    );
+    res.json({ commands: cmds });
   });
 
   // --- Vite middleware / static files ---

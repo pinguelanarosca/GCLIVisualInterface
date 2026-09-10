@@ -2,10 +2,89 @@ import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { GoogleGenAI } from '@google/genai';
 import { CliStatus } from '../src/types.js';
 
 let activeChildProcess: ChildProcess | null = null;
 let currentCustomCliPath: string = '';
+
+let lastValidationCache: {
+  timestamp: number;
+  result: {
+    configured: boolean;
+    valid: boolean;
+    message: string;
+    modelTested?: string;
+    latencyMs?: number;
+  };
+} | null = null;
+
+export async function validateGeminiApiKey(forceFresh = false): Promise<{
+  configured: boolean;
+  valid: boolean;
+  message: string;
+  modelTested?: string;
+  latencyMs?: number;
+}> {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+  if (!apiKey) {
+    return {
+      configured: false,
+      valid: false,
+      message: 'A variável de ambiente GEMINI_API_KEY não foi encontrada.',
+    };
+  }
+
+  // Use 30-second cache unless forced
+  const now = Date.now();
+  if (!forceFresh && lastValidationCache && (now - lastValidationCache.timestamp < 30000)) {
+    return lastValidationCache.result;
+  }
+
+  const startTime = Date.now();
+  try {
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+
+    // Real ping call to verify key authenticity and operational state
+    await ai.models.generateContent({
+      model: 'gemini-flash-latest',
+      contents: 'ping',
+      config: {
+        maxOutputTokens: 2,
+        temperature: 0,
+      },
+    });
+
+    const latencyMs = Date.now() - startTime;
+    const res = {
+      configured: true,
+      valid: true,
+      message: 'Chave GEMINI_API_KEY ativa e validada com sucesso no Google Gemini API.',
+      modelTested: 'gemini-flash-latest',
+      latencyMs,
+    };
+    lastValidationCache = { timestamp: now, result: res };
+    return res;
+  } catch (err: any) {
+    const latencyMs = Date.now() - startTime;
+    const errMsg = err?.message || String(err);
+    const res = {
+      configured: true,
+      valid: false,
+      message: `Chave presente no ambiente, mas a validação com a API retornou: ${errMsg}`,
+      latencyMs,
+    };
+    lastValidationCache = { timestamp: now, result: res };
+    return res;
+  }
+}
 
 const knownSessions = new Set<string>();
 
@@ -70,6 +149,11 @@ export function setCustomCliPath(newPath: string) {
 export async function detectCliStatus(): Promise<CliStatus> {
   const cliPath = getResolvedCliPath();
   const authConfigured = Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY);
+  const apiCheck = authConfigured ? await validateGeminiApiKey() : {
+    configured: false,
+    valid: false,
+    message: 'Nenhuma GEMINI_API_KEY configurada no ambiente.',
+  };
 
   return new Promise((resolve) => {
     try {
@@ -95,6 +179,11 @@ export async function detectCliStatus(): Promise<CliStatus> {
           cliPath,
           connectionState: 'not_detected',
           authConfigured,
+          apiValid: apiCheck.valid,
+          apiChecked: true,
+          apiError: !apiCheck.valid ? apiCheck.message : undefined,
+          latencyMs: apiCheck.latencyMs,
+          modelTested: apiCheck.modelTested,
           approvalMode: 'default',
           errorMessage: `Erro ao executar binário: ${err.message}`,
         });
@@ -108,6 +197,11 @@ export async function detectCliStatus(): Promise<CliStatus> {
             cliPath,
             connectionState: 'connected',
             authConfigured,
+            apiValid: apiCheck.valid,
+            apiChecked: true,
+            apiError: !apiCheck.valid ? apiCheck.message : undefined,
+            latencyMs: apiCheck.latencyMs,
+            modelTested: apiCheck.modelTested,
             approvalMode: 'default',
             errorMessage: !authConfigured ? 'Atenção: Nenhuma GEMINI_API_KEY detectada no ambiente.' : undefined,
           });
@@ -118,6 +212,11 @@ export async function detectCliStatus(): Promise<CliStatus> {
             cliPath,
             connectionState: 'error',
             authConfigured,
+            apiValid: apiCheck.valid,
+            apiChecked: true,
+            apiError: !apiCheck.valid ? apiCheck.message : undefined,
+            latencyMs: apiCheck.latencyMs,
+            modelTested: apiCheck.modelTested,
             approvalMode: 'default',
             errorMessage: stderr.trim() || `Processo saiu com código ${code}`,
           });
@@ -130,6 +229,11 @@ export async function detectCliStatus(): Promise<CliStatus> {
         cliPath,
         connectionState: 'error',
         authConfigured,
+        apiValid: apiCheck.valid,
+        apiChecked: true,
+        apiError: !apiCheck.valid ? apiCheck.message : undefined,
+        latencyMs: apiCheck.latencyMs,
+        modelTested: apiCheck.modelTested,
         approvalMode: 'default',
         errorMessage: err.message,
       });
