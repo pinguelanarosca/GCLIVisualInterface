@@ -1,4 +1,4 @@
-import { execSync, spawnSync } from 'node:child_process';
+import { execSync, spawnSync, spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import { GitAppStatus, GitCommitInfo, GitUpdateCheckResult, GitUpdateResult } from '../src/types.js';
@@ -272,7 +272,17 @@ export interface PerformGitUpdateOptions {
 export function scheduleServerRestart(delayMs: number = 1500) {
   sysLog.warn('SYSTEM', `Reinício programado do processo do servidor em ${delayMs}ms...`);
   setTimeout(() => {
-    sysLog.info('SYSTEM', 'Encerrando processo para reinício automático (supervisor/PM2/systemd)...');
+    sysLog.info('SYSTEM', 'Iniciando novo processo e encerrando o atual...');
+    
+    // Inicia um novo processo independente (detached) usando os mesmos argumentos
+    const child = spawn(process.argv[0], process.argv.slice(1), {
+      detached: true,
+      stdio: 'ignore'
+    });
+    
+    // Desvincula o processo filho para que o pai possa encerrar
+    child.unref();
+    
     process.exit(0);
   }, delayMs);
 }
