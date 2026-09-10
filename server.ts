@@ -3,6 +3,8 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createServer as createViteServer } from 'vite';
 
 // Attempt to load .env from fallback locations if process.env.GEMINI_API_KEY is not set
@@ -25,7 +27,7 @@ for (const envFile of fallbackEnvPaths) {
   }
 }
 import { detectCliStatus, executeGeminiCli, cancelActiveExecution, setCustomCliPath } from './server/gemini-cli-service.js';
-import { ensureAgentsSeeded, loadAgents, saveAgentToFile, deleteAgent } from './server/agents-service.js';
+import { ensureAgentsSeeded, loadAgents, saveAgentToFile, deleteAgent, resetAllAgentsToDefault } from './server/agents-service.js';
 import { ensureSkillsSeeded, loadSkills, saveSkillToFile, deleteSkill } from './server/skills-service.js';
 import { ensureCommandsSeeded, loadCommands, saveCommandToFile, deleteCommand } from './server/commands-service.js';
 import { loadMcpSettings, saveMcpSettings, testMcpServer } from './server/mcp-service.js';
@@ -75,6 +77,32 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  app.post('/api/cli/update', async (req, res) => {
+    try {
+      const execAsync = promisify(exec);
+      // Remove and install fresh latest version of @google/gemini-cli
+      const { stdout, stderr } = await execAsync('npm install @google/gemini-cli@latest', {
+        cwd: process.cwd(),
+        timeout: 120000,
+      });
+
+      const newStatus = await detectCliStatus();
+      res.json({
+        success: true,
+        version: newStatus.version,
+        status: newStatus,
+        stdout,
+        stderr,
+        message: `Gemini CLI atualizado com sucesso para a versão ${newStatus.version}!`,
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: err.message || 'Falha ao atualizar o Gemini CLI',
+      });
+    }
+  });
+
   app.post('/api/config/api-key', (req, res) => {
     const { apiKey } = req.body;
     if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
@@ -106,7 +134,7 @@ async function startServer() {
 
   // 2. Real Execution via Server-Sent Events (SSE)
   app.post('/api/cli/execute', (req, res) => {
-    const { prompt, model, approvalMode, authorizedDirs, sessionId, workDir } = req.body;
+    const { prompt, model, approvalMode, authorizedDirs, sessionId, resume, workDir } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt é obrigatório.' });
@@ -130,6 +158,7 @@ async function startServer() {
       approvalMode,
       authorizedDirs,
       sessionId,
+      resume: Boolean(resume),
       workDir,
       onEvent: (evt) => {
         sendSse(evt.type, evt.data);
@@ -175,6 +204,11 @@ async function startServer() {
     const { name } = req.params;
     const ok = deleteAgent(name);
     res.json({ success: ok, agents: loadAgents() });
+  });
+
+  app.post('/api/agents/reset-defaults', (req, res) => {
+    const agents = resetAllAgentsToDefault();
+    res.json({ success: true, agents });
   });
 
   // 4. Skills

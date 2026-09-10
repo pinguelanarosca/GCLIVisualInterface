@@ -141,24 +141,25 @@ export function ensureAgentsSeeded(targetDir?: string): AgentConfig[] {
     // Ignore permissions in restricted containers
   }
 
-  const existingAgents = loadAgents(targetDir);
-  if (existingAgents.length === 0) {
-    for (const agent of DEFAULT_AGENTS) {
-      saveAgentToFile(agent, targetDir);
+  // Ensure each default agent exists on disk
+  for (const defaultAgent of DEFAULT_AGENTS) {
+    const agentFilePath = path.join(agentsDir, `${defaultAgent.name}.md`);
+    if (!fs.existsSync(agentFilePath)) {
+      saveAgentToFile(defaultAgent, targetDir);
     }
-    return DEFAULT_AGENTS;
   }
-  return existingAgents;
+
+  return loadAgents(targetDir);
 }
 
 export function loadAgents(targetDir?: string): AgentConfig[] {
   const agentsDir = getAgentsDirectory(targetDir);
   if (!fs.existsSync(agentsDir)) {
-    return [];
+    fs.mkdirSync(agentsDir, { recursive: true });
   }
 
   const files = fs.readdirSync(agentsDir).filter((f) => f.endsWith('.md'));
-  const loaded: AgentConfig[] = [];
+  const loadedMap = new Map<string, AgentConfig>();
 
   for (const file of files) {
     const filePath = path.join(agentsDir, file);
@@ -166,14 +167,26 @@ export function loadAgents(targetDir?: string): AgentConfig[] {
       const content = fs.readFileSync(filePath, 'utf8');
       const parsed = parseAgentMarkdown(content, file.replace(/\.md$/, ''));
       if (parsed) {
-        loaded.push(parsed);
+        // Respect the selected model without artificial restrictions
+        if (!parsed.model) {
+          parsed.model = 'gemini-3.5-flash-lite';
+        }
+        loadedMap.set(parsed.name, parsed);
       }
     } catch {
       // Continue loading others
     }
   }
 
-  return loaded.length > 0 ? loaded : DEFAULT_AGENTS;
+  // Make sure all default agents are present so they NEVER disappear when selecting/editing one
+  for (const defaultAgent of DEFAULT_AGENTS) {
+    if (!loadedMap.has(defaultAgent.name)) {
+      saveAgentToFile(defaultAgent, targetDir);
+      loadedMap.set(defaultAgent.name, defaultAgent);
+    }
+  }
+
+  return Array.from(loadedMap.values());
 }
 
 export function saveAgentToFile(agent: AgentConfig, targetDir?: string) {
@@ -259,3 +272,15 @@ function parseAgentMarkdown(content: string, fallbackName: string): AgentConfig 
     statusGrade: 'CONFIGURED',
   };
 }
+
+export function resetAllAgentsToDefault(targetDir?: string): AgentConfig[] {
+  const agentsDir = getAgentsDirectory(targetDir);
+  if (!fs.existsSync(agentsDir)) {
+    fs.mkdirSync(agentsDir, { recursive: true });
+  }
+  for (const agent of DEFAULT_AGENTS) {
+    saveAgentToFile(agent, targetDir);
+  }
+  return loadAgents(targetDir);
+}
+

@@ -77,7 +77,7 @@ fs.writeFileSync(path.join(binDir, 'gemini-gui'), launcherScript, { mode: 0o755 
 // 5. Desktop file
 const desktopFile = `[Desktop Entry]
 Name=Gemini CLI GUI
-Comment=Interface Gráfica Local para o Gemini CLI 0.58.0
+Comment=Interface Gráfica Local para o Gemini CLI
 Exec=/usr/bin/gemini-gui
 Icon=terminal
 Terminal=false
@@ -95,8 +95,8 @@ Priority: optional
 Architecture: all
 Depends: nodejs (>= 18.0.0)
 Maintainer: Gemini CLI GUI Developer <developer@local>
-Description: Interface grafica local, moderna e amigavel para o Gemini CLI 0.58.0 no Ubuntu Linux.
- Integracao direta com o processo real do Gemini CLI 0.58.0, agentes especializados,
+Description: Interface grafica local, moderna e amigavel para o Gemini CLI no Ubuntu Linux.
+ Integracao direta com o processo real do Gemini CLI, agentes especializados,
  skills, comandos, MCP, audio STT/TTS e inspecao de diffs.
 `;
 fs.writeFileSync(path.join(debianMetaDir, 'control'), debianControl, 'utf8');

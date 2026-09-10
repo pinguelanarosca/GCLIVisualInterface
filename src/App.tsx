@@ -45,8 +45,9 @@ export function App() {
   const [mcpServers, setMcpServers] = useState<McpConfig[]>([]);
 
   // Sessions & Messages
+  const generateSessionId = () => `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const [sessions, setSessions] = useState<SessionItem[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string>(`sess_${Date.now()}`);
+  const [currentSessionId, setCurrentSessionId] = useState<string>(generateSessionId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
 
@@ -213,6 +214,7 @@ export function App() {
           approvalMode,
           authorizedDirs: authorizedDirs.map((d) => d.path),
           sessionId: currentSessionId,
+          resume: messages.length > 0,
           workDir: activeProject?.associatedDirs[0] || process.cwd(),
         }),
       });
@@ -589,7 +591,7 @@ export function App() {
   };
 
   const handleNewSession = () => {
-    setCurrentSessionId(`sess_${Date.now()}`);
+    setCurrentSessionId(generateSessionId());
     setMessages([]);
   };
 
@@ -611,6 +613,18 @@ export function App() {
     if (res.ok) {
       const data = await res.json();
       setAgents(data.agents);
+    }
+  };
+
+  const handleResetDefaultAgents = async () => {
+    try {
+      const res = await fetch('/api/agents/reset-defaults', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setAgents(data.agents);
+      }
+    } catch (err) {
+      console.error('Failed to reset default agents:', err);
     }
   };
 
@@ -789,6 +803,7 @@ export function App() {
         approvalMode={approvalMode}
         onChangeApprovalMode={setApprovalMode}
         onRefreshStatus={refreshStatus}
+        onResetDefaultAgentsConfig={handleResetDefaultAgents}
       />
     </div>
   );

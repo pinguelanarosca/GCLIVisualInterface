@@ -6,10 +6,10 @@ import { ValidationItem } from '../src/types.js';
 export function getSystemValidationMatrix(): ValidationItem[] {
   return [
     {
-      item: 'Gemini CLI 0.58.0 Engine Integration',
+      item: 'Gemini CLI Engine Integration',
       category: 'CORE',
       status: 'TESTED',
-      evidence: 'Binário @google/gemini-cli@0.58.0 executado via child_process spawn; versão 0.58.0 confirmada.',
+      evidence: 'Binário @google/gemini-cli@0.59.0 executado via child_process spawn; versão 0.59.0 confirmada.',
       notes: 'Executa nativamente o processo CLI com flags -p, -o stream-json e --skip-trust.',
     },
     {
@@ -24,14 +24,14 @@ export function getSystemValidationMatrix(): ValidationItem[] {
       category: 'AGENTS',
       status: 'TESTED',
       evidence: 'Arquivos .gemini/agents/*.md criados com YAML frontmatter (kind, model, tools, temperature, max_turns).',
-      notes: 'Modelos: 3.5 Flash Lite, 3.7 Flash, 3.6 Flash, 3.8 Flash, 3 Flash, 3.1 Flash Lite.',
+      notes: 'Modelo padrão: 3.5 Flash Lite para estabilidade e alta taxa de requisições.',
     },
     {
       item: '4 Skills Reais (debugging, code-review, testing, project-conventions)',
       category: 'SKILLS',
       status: 'TESTED',
       evidence: 'Pastas .gemini/skills/*/SKILL.md criadas com descrições e fluxos estruturados exatos.',
-      notes: 'Compatível com o loader nativo do Gemini CLI 0.58.0.',
+      notes: 'Compatível com o loader nativo do Gemini CLI.',
     },
     {
       item: '6 Comandos Operacionais (/debug, /test, /review, /implement, /fix, /git:commit)',
@@ -48,10 +48,10 @@ export function getSystemValidationMatrix(): ValidationItem[] {
       notes: 'Comandos gemini mcp list/add/remove/enable/disable integrados na GUI.',
     },
     {
-      item: 'Hooks no Gemini CLI 0.58.0',
+      item: 'Hooks no Gemini CLI',
       category: 'HOOKS',
       status: 'CONFIGURED',
-      evidence: 'Subcomando gemini hooks migrate detectado na versão 0.58.0; hooksConfig suportado no settings.json.',
+      evidence: 'Subcomando gemini hooks migrate detectado; hooksConfig suportado no settings.json.',
       notes: 'Event hooks em modo headless stream-json marcados como NOT VALIDATED (recurso experimental no CLI).',
     },
     {
@@ -247,9 +247,10 @@ Este procedimento permite ao usuário final certificar que a instalação no Ubu
 ## 1. Verificação de Pré-requisitos
 - Execute no terminal:
   \`node --version\` (deve ser >= 18.0.0)
-  \`gemini --version\` (deve retornar 0.58.0)
-- Caso \`gemini\` não esteja instalado globalmente:
-  \`npm install -g @google/gemini-cli@0.58.0\`
+  \`gemini --version\` (deve retornar >= 0.59.0)
+- Para remover versão antiga e instalar a versão mais recente:
+  \`npm uninstall -g @google/gemini-cli\`
+  \`npm install -g @google/gemini-cli@latest\`
 
 ## 2. Inicialização do Aplicativo
 - No terminal:
@@ -258,7 +259,7 @@ Este procedimento permite ao usuário final certificar que a instalação no Ubu
 - O navegador padrão abrirá automaticamente em \`http://localhost:3000\`.
 
 ## 3. Checklist de Validação Funcional
-1. [ ] **Status do CLI**: O cabeçalho deve exibir "Gemini CLI 0.58.0 Conectado" e status verde.
+1. [ ] **Status do CLI**: O cabeçalho deve exibir "Gemini CLI v0.59.0 Conectado" e status verde.
 2. [ ] **Chat Textual**: Envie a mensagem "Olá, teste de conexão". O Gemini responderá em streaming.
 3. [ ] **Ditado por Microfone**: Clique no ícone de microfone no campo de texto, fale uma frase e confirme que o texto é transcrito diretamente no campo.
 4. [ ] **Narração de Resposta**: Na resposta recebida, clique em "Ouvir" e confirme o áudio sintetizado.

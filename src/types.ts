@@ -162,6 +162,21 @@ export interface AppSettings {
   theme: 'dark' | 'light' | 'system';
 }
 
+export interface ModelCatalogItem {
+  order: number;
+  id: string;
+  name: string;
+  rpm: string;
+  tpm: string;
+  rpd: string;
+  category: string;
+  group: 'text' | 'audio' | 'agents' | 'robotics' | 'embeddings' | 'gemma';
+  groupName: string;
+  subFunction?: string;
+  description?: string;
+  recommendedRole?: string;
+}
+
 export interface ValidationItem {
   item: string;
   category: 'CORE' | 'AGENTS' | 'SKILLS' | 'COMMANDS' | 'MCP' | 'HOOKS' | 'AUDIO' | 'PACKAGING';

@@ -23,6 +23,7 @@ import {
   ExternalLink,
   ShieldAlert,
   Sliders,
+  Copy,
 } from 'lucide-react';
 import {
   CliStatus,
@@ -33,6 +34,8 @@ import {
   AudioSettings,
   ValidationItem,
 } from '../types.js';
+import { ModelSelectorModal } from './ModelSelectorModal.js';
+import { ModelCatalogView } from './ModelCatalogView.js';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -55,6 +58,7 @@ interface SettingsModalProps {
   approvalMode: 'default' | 'auto_edit' | 'yolo' | 'plan';
   onChangeApprovalMode: (mode: 'default' | 'auto_edit' | 'yolo' | 'plan') => void;
   onRefreshStatus?: () => void;
+  onResetDefaultAgentsConfig?: () => Promise<void>;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -78,6 +82,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   approvalMode,
   onChangeApprovalMode,
   onRefreshStatus,
+  onResetDefaultAgentsConfig,
 }) => {
   const [activeTab, setActiveTab] = useState<string>(initialTab);
 
@@ -126,6 +131,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Agent editing
   const [editingAgent, setEditingAgent] = useState<AgentConfig | null>(null);
+  const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+  const [agentForModelSelect, setAgentForModelSelect] = useState<AgentConfig | null>(null);
 
   // Skill editing
   const [editingSkill, setEditingSkill] = useState<SkillConfig | null>(null);
@@ -136,6 +143,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // MCP testing state
   const [mcpTestResult, setMcpTestResult] = useState<{ [name: string]: { loading: boolean; message: string; success?: boolean } }>({});
+
+  // CLI update & reinstall state
+  const [isUpdatingCli, setIsUpdatingCli] = useState(false);
+  const [updateCliResult, setUpdateCliResult] = useState<{ success: boolean; message: string; version?: string } | null>(null);
+  const [copiedCmd, setCopiedCmd] = useState(false);
+
+  const handleUpdateCli = async () => {
+    setIsUpdatingCli(true);
+    setUpdateCliResult(null);
+    try {
+      const res = await fetch('/api/cli/update', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setUpdateCliResult({
+          success: true,
+          message: data.message || `Gemini CLI atualizado com sucesso para v${data.version}!`,
+          version: data.version,
+        });
+        if (onRefreshStatus) {
+          onRefreshStatus();
+        }
+      } else {
+        setUpdateCliResult({
+          success: false,
+          message: data.error || 'Falha ao atualizar o Gemini CLI',
+        });
+      }
+    } catch (err: any) {
+      setUpdateCliResult({
+        success: false,
+        message: err.message || 'Erro de conexão ao tentar atualizar o CLI',
+      });
+    } finally {
+      setIsUpdatingCli(false);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCmd(true);
+    setTimeout(() => setCopiedCmd(false), 2500);
+  };
 
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
@@ -201,7 +250,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 Centro de Configurações do Gemini CLI
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                Controle do motor CLI 0.58.0, modelos, agentes, skills, comandos, áudio e empacotamento
+                Controle do motor Gemini CLI {cliStatus?.version ? `v${cliStatus.version}` : 'v0.59.0'}, modelos, agentes, skills, comandos, áudio e empacotamento
               </p>
             </div>
           </div>
@@ -224,7 +273,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               { id: 'skills', label: 'Skills (4)', icon: Sparkles },
               { id: 'commands', label: 'Comandos (6)', icon: Code2 },
               { id: 'mcp', label: 'MCP (GitHub)', icon: Layers },
-              { id: 'hooks', label: 'Hooks (0.58.0)', icon: Sliders },
+              { id: 'hooks', label: cliStatus?.version ? `Hooks (${cliStatus.version})` : 'Hooks', icon: Sliders },
               { id: 'permissions', label: 'Permissões & Modos', icon: Shield },
               { id: 'audio', label: 'Áudio STT / TTS', icon: Volume2 },
               { id: 'packaging', label: 'Empacotamento & Status', icon: Package },
@@ -266,7 +315,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex justify-between items-center">
                     <span className="text-zinc-500">Versão Detectada:</span>
                     <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">
-                      {cliStatus?.version || '0.58.0'}
+                      {cliStatus?.version || '0.59.0'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -358,6 +407,81 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </p>
                 </div>
 
+                {/* CLI Reinstall & Update Card */}
+                <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/90 shadow-xs space-y-3">
+                  <div>
+                    <h5 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      <span>Remover Versão Anterior e Instalar Versão Mais Recente</span>
+                    </h5>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                      Atualize o binário oficial do Gemini CLI (<code className="font-mono text-zinc-700 dark:text-zinc-300">@google/gemini-cli</code>) para a versão mais recente publicada.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleUpdateCli}
+                      disabled={isUpdatingCli}
+                      className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isUpdatingCli ? 'animate-spin' : ''}`} />
+                      {isUpdatingCli ? 'Atualizando Gemini CLI...' : 'Instalar Versão Mais Recente Agora'}
+                    </button>
+                  </div>
+
+                  {updateCliResult && (
+                    <div
+                      className={`p-3 rounded-lg text-xs flex items-start gap-2.5 ${
+                        updateCliResult.success
+                          ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                          : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                      }`}
+                    >
+                      {updateCliResult.success ? (
+                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                      )}
+                      <div className="space-y-1">
+                        <p className="font-semibold">{updateCliResult.message}</p>
+                        {updateCliResult.version && (
+                          <p className="text-[11px] font-mono">Versão ativa: v{updateCliResult.version}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+                        Comandos para executar no Terminal (Ubuntu / Linux / Mac):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyToClipboard(
+                            'npm uninstall -g @google/gemini-cli && npm install -g @google/gemini-cli@latest'
+                          )
+                        }
+                        className="text-[10px] flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      >
+                        <Copy className="w-3 h-3" />
+                        {copiedCmd ? 'Copiado!' : 'Copiar Comandos'}
+                      </button>
+                    </div>
+                    <div className="p-3 rounded-lg bg-zinc-900 text-zinc-200 font-mono text-[11px] overflow-x-auto space-y-1.5">
+                      <p className="text-zinc-500"># 1. Remover versão anterior globalmente:</p>
+                      <p className="text-amber-400">npm uninstall -g @google/gemini-cli</p>
+                      <p className="text-zinc-500 pt-1"># 2. Instalar a versão mais recente oficial:</p>
+                      <p className="text-emerald-400">npm install -g @google/gemini-cli@latest</p>
+                      <p className="text-zinc-500 pt-1"># 3. Confirmar a versão instalada no sistema:</p>
+                      <p className="text-blue-400">gemini --version</p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                     Modo de Aprovação de Ações (--approval-mode)
@@ -378,85 +502,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* 2. MODELOS */}
             {activeTab === 'models' && (
-              <div className="space-y-6 max-w-3xl">
+              <div className="space-y-6 max-w-4xl">
                 <div>
                   <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    Mapeamento de Modelos por Função
+                    Catálogo de Modelos, Cotas e Mapeamento
                   </h4>
                   <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
-                    Configuração dos modelos atribuídos a cada agente operacional do Gemini CLI e à camada de áudio da GUI.
+                    Prioridade oficial por cotas (RPM / TPM / RPD), especialidades operacionais e configuração padrão dos agentes.
                   </p>
                 </div>
-
-                {/* Execution Models */}
-                <div>
-                  <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
-                    Modelos de Execução do Gemini CLI
-                  </h5>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {[
-                      { role: 'Principal / Orchestrator', model: 'gemini-3.5-flash-lite', desc: 'Coordenação e roteamento' },
-                      { role: 'Investigator', model: 'gemini-3.7-flash', desc: 'Investigação e diagnóstico' },
-                      { role: 'Architect', model: 'gemini-3.6-flash', desc: 'Decisões arquiteturais' },
-                      { role: 'Auditor', model: 'gemini-3.8-flash', desc: 'Revisão crítica e auditoria' },
-                      { role: 'Tester', model: 'gemini-3-flash', desc: 'Testes e validação' },
-                      { role: 'Worker', model: 'gemini-3.1-flash-lite', desc: 'Tarefas repetitivas' },
-                    ].map((m) => (
-                      <div key={m.role} className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40">
-                        <div className="font-semibold text-xs text-zinc-800 dark:text-zinc-200">{m.role}</div>
-                        <div className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 mt-1">{m.model}</div>
-                        <div className="text-[11px] text-zinc-500 mt-0.5">{m.desc}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Interface Audio Models */}
-                <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
-                  <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
-                    Modelos de Áudio da Interface (Camada Separada)
-                  </h5>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                    <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40">
-                      <div className="font-semibold text-zinc-800 dark:text-zinc-200">STT / Ditado</div>
-                      <div className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                        gemini-3.5-transcribe
-                      </div>
-                      <div className="text-[11px] text-zinc-500 mt-0.5">Converte voz em texto para entrada</div>
-                    </div>
-
-                    <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40">
-                      <div className="font-semibold text-zinc-800 dark:text-zinc-200">TTS / Narração</div>
-                      <div className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 mt-1">
-                        gemini-3.1-flash-tts-preview
-                      </div>
-                      <div className="text-[11px] text-zinc-500 mt-0.5">Sintetiza respostas textuais em áudio</div>
-                    </div>
-
-                    <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 opacity-70">
-                      <div className="font-semibold text-zinc-800 dark:text-zinc-200">Voz Tempo Real</div>
-                      <div className="font-mono text-xs font-bold text-zinc-600 dark:text-zinc-400 mt-1">
-                        gemini-3.1-flash-live-preview
-                      </div>
-                      <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
-                        Arquitetura preparada (Futuro)
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <ModelCatalogView
+                  agents={agents}
+                  onResetDefaultAgentsConfig={onResetDefaultAgentsConfig || (async () => {})}
+                />
               </div>
             )}
 
             {/* 3. AGENTES */}
             {activeTab === 'agents' && (
               <div className="space-y-6">
-                <div>
-                  <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    Agentes Especializados do Gemini CLI (.gemini/agents/*.md)
-                  </h4>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Cada agente possui arquivo Markdown com YAML frontmatter reconhecido pelo Gemini CLI 0.58.0.
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      Agentes Especializados do Gemini CLI (.gemini/agents/*.md)
+                    </h4>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Cada agente possui arquivo Markdown com YAML frontmatter reconhecido pelo Gemini CLI.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (onResetDefaultAgentsConfig) {
+                        await onResetDefaultAgentsConfig();
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-xs font-semibold flex items-center gap-1.5 transition self-start cursor-pointer shrink-0"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Restaurar Configuração Padrão</span>
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -470,9 +555,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           <span className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">
                             {agent.displayName || agent.name}
                           </span>
-                          <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
-                            {agent.model}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAgentForModelSelect(agent);
+                              setIsModelSelectorOpen(true);
+                            }}
+                            title="Clique para trocar de modelo pelo catálogo"
+                            className="font-mono text-[11px] px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/60 transition cursor-pointer flex items-center gap-1"
+                          >
+                            <Cpu className="w-3 h-3" />
+                            <span>{agent.model}</span>
+                          </button>
                         </div>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1.5 line-clamp-2">
                           {agent.description}
@@ -483,12 +577,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <span className="text-[10px] text-zinc-400 font-mono">
                           tools: {agent.tools.join(', ')} | max: {agent.maxTurns}
                         </span>
-                        <button
-                          onClick={() => setEditingAgent({ ...agent })}
-                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-300 transition"
-                        >
-                          Editar Instruções
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAgentForModelSelect(agent);
+                              setIsModelSelectorOpen(true);
+                            }}
+                            className="px-2 py-1 text-xs font-medium rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600 transition cursor-pointer"
+                          >
+                            Modelo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingAgent({ ...agent })}
+                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition cursor-pointer"
+                          >
+                            Editar Agente
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -516,13 +623,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-zinc-500 mb-1">Modelo</label>
-                          <input
-                            type="text"
-                            value={editingAgent.model}
-                            onChange={(e) => setEditingAgent({ ...editingAgent, model: e.target.value })}
-                            className="w-full px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono"
-                          />
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-zinc-500">Modelo Operacional</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAgentForModelSelect(editingAgent);
+                                setIsModelSelectorOpen(true);
+                              }}
+                              className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                            >
+                              <Cpu className="w-3.5 h-3.5" />
+                              Ver Tabela & Selecionar Catálogo
+                            </button>
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={editingAgent.model}
+                              onChange={(e) => setEditingAgent({ ...editingAgent, model: e.target.value })}
+                              className="flex-1 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono text-xs"
+                              placeholder="ex: gemini-3.7-flash"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAgentForModelSelect(editingAgent);
+                                setIsModelSelectorOpen(true);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-xs font-semibold cursor-pointer transition shrink-0"
+                            >
+                              Catálogo...
+                            </button>
+                          </div>
+                          <div className="flex gap-1.5 mt-2 flex-wrap">
+                            {[
+                              { label: 'gemini-3.8-flash (Auditor)', model: 'gemini-3.8-flash' },
+                              { label: 'gemini-3.7-flash (Investigator)', model: 'gemini-3.7-flash' },
+                              { label: 'gemini-3.6-flash (Architect)', model: 'gemini-3.6-flash' },
+                              { label: 'gemini-3-flash (Tester)', model: 'gemini-3-flash' },
+                              { label: 'gemini-3.1-flash-lite (Worker)', model: 'gemini-3.1-flash-lite' },
+                              { label: 'gemini-3.5-flash-lite (Principal)', model: 'gemini-3.5-flash-lite' },
+                            ].map((preset) => (
+                              <button
+                                key={preset.model}
+                                type="button"
+                                onClick={() => setEditingAgent({ ...editingAgent, model: preset.model })}
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono border transition cursor-pointer ${
+                                  editingAgent.model === preset.model
+                                    ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-400 font-bold'
+                                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200'
+                                }`}
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                         <div>
                           <label className="block text-zinc-500 mb-1">Instruções do Sistema (Markdown body)</label>
@@ -863,7 +1019,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="space-y-6 max-w-2xl">
                 <div>
                   <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    Hooks no Gemini CLI 0.58.0
+                    Hooks no Gemini CLI {cliStatus?.version || '0.59.0'}
                   </h4>
                   <p className="text-xs text-zinc-500 mt-1">
                     Status e suporte para migração e acionadores de eventos.
@@ -876,7 +1032,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       gemini hooks migrate
                     </span>
                     <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
-                      Suportado no CLI 0.58.0
+                      Suportado no CLI {cliStatus?.version || '0.59.0'}
                     </span>
                   </div>
                   <p className="text-zinc-500">
@@ -1130,6 +1286,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Model Selector Modal */}
+      <ModelSelectorModal
+        isOpen={isModelSelectorOpen}
+        onClose={() => {
+          setIsModelSelectorOpen(false);
+          setAgentForModelSelect(null);
+        }}
+        currentModel={editingAgent?.model || agentForModelSelect?.model || 'gemini-3.5-flash-lite'}
+        agentName={editingAgent?.displayName || editingAgent?.name || agentForModelSelect?.displayName || agentForModelSelect?.name}
+        onSelectModel={async (modelId) => {
+          if (editingAgent) {
+            setEditingAgent({ ...editingAgent, model: modelId });
+          } else if (agentForModelSelect) {
+            const updated = { ...agentForModelSelect, model: modelId };
+            await onSaveAgent(updated);
+          }
+        }}
+      />
     </div>
   );
 };

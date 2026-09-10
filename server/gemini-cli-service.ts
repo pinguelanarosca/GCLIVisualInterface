@@ -1,10 +1,54 @@
 import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { CliStatus } from '../src/types.js';
 
 let activeChildProcess: ChildProcess | null = null;
 let currentCustomCliPath: string = '';
+
+const knownSessions = new Set<string>();
+
+export function isExistingSession(sessionId?: string): boolean {
+  if (!sessionId) return false;
+  if (knownSessions.has(sessionId)) return true;
+
+  try {
+    const homedir = os.homedir();
+    const geminiTmp = path.join(homedir, '.gemini', 'tmp');
+    if (fs.existsSync(geminiTmp)) {
+      const checkDir = (dir: string, depth = 0): boolean => {
+        if (depth > 5) return false;
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            if (checkDir(fullPath, depth + 1)) return true;
+          } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+            try {
+              const fd = fs.openSync(fullPath, 'r');
+              const buf = Buffer.alloc(300);
+              const bytesRead = fs.readSync(fd, buf, 0, 300, 0);
+              fs.closeSync(fd);
+              const header = buf.toString('utf8', 0, bytesRead);
+              if (header.includes(`"sessionId":"${sessionId}"`)) {
+                knownSessions.add(sessionId);
+                return true;
+              }
+            } catch {
+              // Ignore reading errors
+            }
+          }
+        }
+        return false;
+      };
+      return checkDir(geminiTmp);
+    }
+  } catch {
+    // Ignore error
+  }
+  return false;
+}
 
 export function getResolvedCliPath(): string {
   if (currentCustomCliPath && fs.existsSync(currentCustomCliPath)) {
@@ -99,13 +143,14 @@ export interface CliExecutionParams {
   approvalMode?: 'default' | 'auto_edit' | 'yolo' | 'plan';
   authorizedDirs?: string[];
   sessionId?: string;
+  resume?: boolean;
   workDir?: string;
   onEvent: (event: { type: string; data: any }) => void;
   onDone: (exitCode: number | null, signal: string | null) => void;
   onError: (error: Error) => void;
 }
 
-export function executeGeminiCli(params: CliExecutionParams): { cancel: () => void } {
+export function executeGeminiCli(params: CliExecutionParams, isRetry = false): { cancel: () => void } {
   const cliPath = getResolvedCliPath();
   const args: string[] = [
     '-p', params.prompt,
@@ -113,17 +158,12 @@ export function executeGeminiCli(params: CliExecutionParams): { cancel: () => vo
     '--skip-trust',
   ];
 
-  // Only pass -m if a supported model is specified. If 'auto' or custom persona name, let CLI pick auto.
-  if (
-    params.model &&
-    params.model !== 'auto' &&
-    !params.model.includes('3.5-flash-lite') &&
-    !params.model.includes('3.6-flash') &&
-    !params.model.includes('3.7-flash') &&
-    !params.model.includes('3.8-flash')
-  ) {
-    args.push('-m', params.model);
+  // Determine model: respect the configured model for the agent/execution, default to 'gemini-3.5-flash-lite'
+  let chosenModel = params.model;
+  if (!chosenModel || chosenModel === 'auto') {
+    chosenModel = 'gemini-3.5-flash-lite';
   }
+  args.push('-m', chosenModel);
 
   if (params.approvalMode) {
     args.push('--approval-mode', params.approvalMode);
@@ -134,7 +174,13 @@ export function executeGeminiCli(params: CliExecutionParams): { cancel: () => vo
   }
 
   if (params.sessionId) {
-    args.push('--session-id', params.sessionId);
+    const shouldResume = params.resume || isRetry || isExistingSession(params.sessionId);
+    if (shouldResume) {
+      args.push('-r', params.sessionId);
+    } else {
+      args.push('--session-id', params.sessionId);
+      knownSessions.add(params.sessionId);
+    }
   }
 
   const cwd = params.workDir || (params.authorizedDirs && params.authorizedDirs[0]) || process.cwd();
@@ -202,6 +248,19 @@ export function executeGeminiCli(params: CliExecutionParams): { cancel: () => vo
   });
 
   child.on('close', (code, signal) => {
+    // If Gemini CLI exited with code 42 due to session collision, auto-retry with resume
+    if (
+      code === 42 &&
+      (stderrText.includes('already exists') || stderrText.includes('--resume') || stderrText.includes('Session ID')) &&
+      params.sessionId &&
+      !isRetry
+    ) {
+      knownSessions.add(params.sessionId);
+      activeChildProcess = null;
+      executeGeminiCli({ ...params, resume: true }, true);
+      return;
+    }
+
     if (buffer.trim()) {
       try {
         const parsed = JSON.parse(buffer.trim());
@@ -215,9 +274,39 @@ export function executeGeminiCli(params: CliExecutionParams): { cancel: () => vo
     }
 
     if (code !== 0 && code !== null) {
+      const isQuotaError =
+        stderrText.includes('TerminalQuotaError') ||
+        stderrText.includes('Quota exceeded') ||
+        stderrText.includes('429') ||
+        reportedErrorText.toLowerCase().includes('quota') ||
+        reportedErrorText.includes('429');
+
+      // If quota was exceeded on another model, attempt auto-fallback to gemini-3.5-flash-lite
+      if (isQuotaError && !isRetry && chosenModel !== 'gemini-3.5-flash-lite') {
+        params.onEvent({
+          type: 'stream_event',
+          data: {
+            type: 'message',
+            role: 'assistant',
+            content: '⚠️ *Limite gratuito do modelo atingido. Alternando automaticamente para Gemini 3.5 Flash-Lite para continuar sua solicitação...*\n\n',
+          },
+        });
+        activeChildProcess = null;
+        executeGeminiCli({ ...params, model: 'gemini-3.5-flash-lite', resume: true }, true);
+        return;
+      }
+
       let finalMessage = reportedErrorText || stderrText.trim();
       if (stderrText.includes('Please set an Auth method') || stderrText.includes('GEMINI_API_KEY')) {
         finalMessage = 'A chave de API do Gemini (GEMINI_API_KEY) não está configurada no seu ambiente. Configure-a no menu de Configurações da GUI ou exporte a variável no terminal.';
+      } else if (isQuotaError) {
+        const retryMatch = (stderrText + ' ' + reportedErrorText).match(/Please retry in ([0-9.]+s?)/i);
+        const retryTime = retryMatch ? ` em aproximadamente ${retryMatch[1]}` : ' em alguns instantes';
+        finalMessage = `⚠️ Cota da API do Gemini Excedida (Erro 429):
+Você atingiu o limite gratuito de requisições da sua conta para o modelo atual.
+• Tente novamente${retryTime}.
+• Recomendação: utilize o modelo "Gemini 3.5 Flash-Lite" no seletor de agentes para maior velocidade e limites de requisição.
+• Você também pode configurar sua chave de API própria no menu de Configurações ou em https://aistudio.google.com.`;
       } else if (!finalMessage) {
         finalMessage = `O Gemini CLI encerrou com código de erro ${code}.`;
       }
