@@ -31,6 +31,7 @@ import { ensureAgentsSeeded, loadAgents, saveAgentToFile, deleteAgent, resetAllA
 import { ensureSkillsSeeded, loadSkills, saveSkillToFile, deleteSkill } from './server/skills-service.js';
 import { ensureCommandsSeeded, loadCommands, saveCommandToFile, deleteCommand } from './server/commands-service.js';
 import { loadMcpSettings, saveMcpSettings, testMcpServer } from './server/mcp-service.js';
+import { loadPolicies, savePolicy, deletePolicy, renamePolicy } from './server/policies-service.js';
 import {
   getAuthorizedDirs,
   addAuthorizedDir,
@@ -43,6 +44,7 @@ import {
   saveSession,
   deleteSession,
   inspectFilesAndDiffs,
+  readFileContent,
 } from './server/projects-and-dirs-service.js';
 import { checkAudioModelsAvailability, transcribeAudio, synthesizeSpeech } from './server/audio-service.js';
 import { getSystemValidationMatrix, buildPackagingArtifacts } from './server/packaging-service.js';
@@ -395,7 +397,39 @@ priority = 90
     res.json(result);
   });
 
-  // 7. Authorized Directories
+  // 7. Policies
+  app.get('/api/policies', (req, res) => {
+    res.json(loadPolicies());
+  });
+
+  app.post('/api/policies', (req, res) => {
+    const { filename, content } = req.body;
+    if (!filename) return res.status(400).json({ error: 'Filename é obrigatório' });
+    const success = savePolicy(filename, content || '');
+    res.json({ success });
+  });
+
+  app.put('/api/policies/:filename', (req, res) => {
+    const { filename } = req.params;
+    const { newFilename, content } = req.body;
+    if (newFilename && newFilename !== filename) {
+      renamePolicy(filename, newFilename);
+      if (content !== undefined) {
+        savePolicy(newFilename, content);
+      }
+    } else if (content !== undefined) {
+      savePolicy(filename, content);
+    }
+    res.json({ success: true });
+  });
+
+  app.delete('/api/policies/:filename', (req, res) => {
+    const { filename } = req.params;
+    const success = deletePolicy(filename);
+    res.json({ success });
+  });
+
+  // 8. Authorized Directories
   app.get('/api/directories', (req, res) => {
     res.json(getAuthorizedDirs());
   });
@@ -470,6 +504,14 @@ priority = 90
   app.get('/api/files', (req, res) => {
     const { dir } = req.query;
     const result = inspectFilesAndDiffs(dir as string);
+    res.json(result);
+  });
+
+  app.get('/api/files/read', (req, res) => {
+    const { path: filePath } = req.query;
+    if (!filePath) return res.status(400).json({ error: 'Caminho do arquivo é obrigatório' });
+    const result = readFileContent(filePath as string);
+    if (!result.success) return res.status(400).json(result);
     res.json(result);
   });
 

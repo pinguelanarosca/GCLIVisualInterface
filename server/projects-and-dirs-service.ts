@@ -433,7 +433,8 @@ export function inspectFilesAndDiffs(dirPath?: string): FilesAndDiffsResult {
           const filePath = line.substring(3).trim();
 
           let status: 'modified' | 'added' | 'deleted' | 'untracked' = 'modified';
-          if (flag.includes('A') || flag === '??') status = 'added';
+          if (flag === '??') status = 'untracked';
+          else if (flag.includes('A')) status = 'added';
           else if (flag.includes('D')) status = 'deleted';
 
           let diff = '';
@@ -445,7 +446,20 @@ export function inspectFilesAndDiffs(dirPath?: string): FilesAndDiffsResult {
               timeout: 2500,
             });
           } catch {
-            diff = `Arquivo não versionado ou novo: ${filePath}`;
+            // Might be a binary file or other issue
+          }
+
+          // If it's a new file (untracked or added) and diff is empty, try to show content as added lines
+          if (!diff && (status === 'added' || status === 'untracked')) {
+            try {
+              const fullPath = path.join(targetDir, filePath);
+              if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+                const content = fs.readFileSync(fullPath, 'utf8');
+                diff = content.split('\n').map(l => '+' + l).join('\n');
+              }
+            } catch (err) {
+              diff = `Arquivo novo: ${filePath} (não foi possível ler o conteúdo)`;
+            }
           }
 
           diffs.push({
@@ -475,4 +489,32 @@ export function inspectFilesAndDiffs(dirPath?: string): FilesAndDiffsResult {
     diffs,
     authorizedDirs: store.authorizedDirs,
   };
+}
+
+export function readFileContent(filePath: string): { success: boolean; content?: string; error?: string } {
+  const resolved = resolveLocalPath(filePath);
+  if (!isPathAuthorized(resolved)) {
+    return { success: false, error: 'Acesso negado. O diretório não está autorizado.' };
+  }
+
+  if (!fs.existsSync(resolved)) {
+    return { success: false, error: 'Arquivo não encontrado.' };
+  }
+
+  try {
+    const stat = fs.statSync(resolved);
+    if (!stat.isFile()) {
+      return { success: false, error: 'O caminho especificado não é um arquivo.' };
+    }
+
+    // Limit size for safety (e.g. 5MB)
+    if (stat.size > 5 * 1024 * 1024) {
+      return { success: false, error: 'O arquivo é muito grande para visualização direta (limite 5MB).' };
+    }
+
+    const content = fs.readFileSync(resolved, 'utf8');
+    return { success: true, content };
+  } catch (err: any) {
+    return { success: false, error: `Erro ao ler arquivo: ${err.message}` };
+  }
 }

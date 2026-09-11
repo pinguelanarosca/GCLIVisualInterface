@@ -1,12 +1,100 @@
 {
   "mcpServers": {
     "github": {
+      "env": {},
       "command": "npx",
       "args": [
         "-y",
         "@modelcontextprotocol/server-github"
-      ],
-      "env": {}
+      ]
+    },
+    "Exa": {
+      "env": {},
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.exa.ai/mcp"
+      ]
     }
+  },
+  "modelConfigs": {
+    "overrides": [
+      {
+        "match": {
+          "overrideScope": "principal"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "temperature": 0.2
+          }
+        }
+      },
+      {
+        "match": {
+          "overrideScope": "investigator"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "temperature": 0.1
+          }
+        }
+      },
+      {
+        "match": {
+          "overrideScope": "architect"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "temperature": 0.2
+          }
+        }
+      },
+      {
+        "match": {
+          "overrideScope": "auditor"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "temperature": 0.1
+          }
+        }
+      },
+      {
+        "match": {
+          "overrideScope": "tester"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "temperature": 0.2
+          }
+        }
+      },
+      {
+        "match": {
+          "overrideScope": "worker"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "temperature": 0.2
+          }
+        }
+      },
+      {
+        "match": {
+          "overrideScope": "Jumentinho"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "temperature": 2,
+            "topP": 1,
+            "topK": 0,
+            "thinkingConfig": {
+              "includeThoughts": true
+            }
+          }
+        }
+      }
+    ]
   }
 }

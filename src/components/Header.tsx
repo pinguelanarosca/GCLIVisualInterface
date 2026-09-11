@@ -8,6 +8,7 @@ import {
   Moon,
   RefreshCw,
   Activity,
+  Square,
 } from 'lucide-react';
 import { CliStatus, ProjectItem, AgentConfig, ChatMessage, AuthorizedDir, SkillConfig, McpConfig } from '../types.js';
 import { TokenMonitorBar } from './TokenMonitorBar.js';
@@ -34,6 +35,7 @@ interface HeaderProps {
   isCheckingStatus: boolean;
   messages?: ChatMessage[];
   isStreaming?: boolean;
+  onCancelExecution?: () => void;
   authorizedDirs?: AuthorizedDir[];
   skills?: SkillConfig[];
   mcpServers?: McpConfig[];
@@ -62,6 +64,7 @@ export const Header: React.FC<HeaderProps> = ({
   isCheckingStatus,
   messages = [],
   isStreaming = false,
+  onCancelExecution,
   authorizedDirs = [],
   skills = [],
   mcpServers = [],
@@ -179,6 +182,17 @@ export const Header: React.FC<HeaderProps> = ({
           <Activity className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
           <span>Logs</span>
         </button>
+
+        {isStreaming && (
+          <button
+            onClick={onCancelExecution}
+            title="Interromper execução (Botão Superior)"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold rounded-lg text-white bg-rose-600 hover:bg-rose-700 transition shadow-sm animate-pulse"
+          >
+            <Square className="w-3 h-3 fill-current" />
+            <span>INTERROMPER</span>
+          </button>
+        )}
 
         <button
           onClick={onToggleAutoPlayTts}

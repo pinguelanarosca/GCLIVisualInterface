@@ -235,21 +235,61 @@ export const RawPayloadViewer: React.FC<RawPayloadViewerProps> = ({ data, isUser
                   {data.output.toolCalls.map((tc, idx) => (
                     <div key={tc.id || idx} className="p-2 rounded bg-black/50 border border-zinc-800 space-y-1">
                       <div className="flex items-center justify-between text-zinc-300 font-bold">
-                        <span>{tc.toolName}</span>
+                        <div className="group relative flex items-center gap-2">
+                          <span className="cursor-help underline decoration-dotted decoration-zinc-600 underline-offset-2">{tc.toolName}</span>
+                          
+                          {/* Transparency Tooltip */}
+                          <div className="absolute bottom-full left-0 mb-2 w-80 p-3 bg-zinc-900 text-zinc-100 rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 border border-zinc-700/50 font-sans text-[10px] leading-relaxed backdrop-blur-md">
+                            <div className="space-y-2.5">
+                              <div className="flex items-center gap-2 border-b border-zinc-700/50 pb-1.5 mb-1.5">
+                                <Terminal className="w-3 h-3 text-blue-400" />
+                                <span className="font-bold uppercase tracking-tight text-zinc-400">Transparência de Execução</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                                <div>
+                                  <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">ID Real</span>
+                                  <code className="text-blue-400 break-all font-mono">{tc.toolName}</code>
+                                </div>
+                                <div>
+                                  <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Origem</span>
+                                  <span className={tc.origin ? 'text-zinc-200' : 'text-zinc-500 italic'}>{tc.origin || 'Não disponível'}</span>
+                                </div>
+                                <div className="col-span-2">
+                                  <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Descrição</span>
+                                  <span className={tc.description ? 'text-zinc-200' : 'text-zinc-500 italic'}>{tc.description || 'Não disponível'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Registro</span>
+                                  <span className={tc.componentRegister ? 'text-zinc-200' : 'text-zinc-500 italic'}>{tc.componentRegister || 'Não disponível'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Executor</span>
+                                  <span className={tc.componentExecutor ? 'text-zinc-200' : 'text-zinc-500 italic'}>{tc.componentExecutor || 'Não disponível'}</span>
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Parâmetros Efetivos</span>
+                                <pre className="text-emerald-400 overflow-x-auto max-h-24 p-1.5 bg-black/40 rounded-lg font-mono text-[9px] border border-white/5 whitespace-pre-wrap break-all">
+                                  {JSON.stringify(tc.parameters, null, 2)}
+                                </pre>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300">
                           {tc.status}
                         </span>
                       </div>
                       <div>
                         <span className="text-zinc-500">Parâmetros:</span>
-                        <pre className="p-1 rounded bg-zinc-900 text-amber-300 text-[10px]">
+                        <pre className="p-1 rounded bg-zinc-900 text-amber-300 text-[10px] whitespace-pre-wrap break-all">
                           {JSON.stringify(tc.parameters, null, 2)}
                         </pre>
                       </div>
                       {tc.result && (
                         <div>
                           <span className="text-zinc-500">Stdout/Resultado:</span>
-                          <pre className="p-1 rounded bg-zinc-900 text-zinc-300 text-[10px] max-h-28 overflow-y-auto">
+                          <pre className="p-1 rounded bg-zinc-900 text-zinc-300 text-[10px] max-h-28 overflow-y-auto whitespace-pre-wrap break-all">
                             {tc.result}
                           </pre>
                         </div>
@@ -309,7 +349,7 @@ export const RawPayloadViewer: React.FC<RawPayloadViewerProps> = ({ data, isUser
                   <span>{copied ? 'Copiado!' : 'Copiar'}</span>
                 </button>
               </div>
-              <pre className="p-3 rounded-lg bg-black text-emerald-400 font-mono text-[10px] max-h-80 overflow-y-auto border border-zinc-800">
+              <pre className="p-3 rounded-lg bg-black text-emerald-400 font-mono text-[10px] max-h-80 overflow-y-auto border border-zinc-800 whitespace-pre-wrap break-all">
                 {fullJsonString}
               </pre>
             </div>

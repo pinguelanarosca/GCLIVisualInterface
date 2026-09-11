@@ -22,6 +22,7 @@ import {
   RefreshCw,
   ExternalLink,
   ShieldAlert,
+  ShieldCheck,
   Sliders,
   Copy,
   GitPullRequest,
@@ -38,6 +39,7 @@ import {
   SkillConfig,
   CommandConfig,
   McpConfig,
+  PolicyConfig,
   AudioSettings,
   ValidationItem,
 } from '../types.js';
@@ -191,6 +193,54 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // MCP testing state
   const [mcpTestResult, setMcpTestResult] = useState<{ [name: string]: { loading: boolean; message: string; success?: boolean } }>({});
 
+  // Policy editing state
+  const [policies, setPolicies] = useState<PolicyConfig[]>([]);
+  const [editingPolicy, setEditingPolicy] = useState<PolicyConfig | null>(null);
+  const [originalFilename, setOriginalFilename] = useState<string | null>(null);
+  const [isNewPolicy, setIsNewPolicy] = useState(false);
+
+  const loadLocalPolicies = async () => {
+    try {
+      const res = await fetch('/api/policies');
+      const data = await res.json();
+      setPolicies(data);
+    } catch (err) {
+      console.error('Falha ao carregar políticas:', err);
+    }
+  };
+
+  const handleSavePolicy = async (policy: PolicyConfig, oldFilename?: string) => {
+    try {
+      const method = oldFilename ? 'PUT' : 'POST';
+      const url = oldFilename ? `/api/policies/${oldFilename}` : '/api/policies';
+      const body = oldFilename ? { newFilename: policy.filename, content: policy.content } : policy;
+      
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        loadLocalPolicies();
+        setEditingPolicy(null);
+      }
+    } catch (err) {
+      console.error('Falha ao salvar política:', err);
+    }
+  };
+
+  const handleDeletePolicy = async (filename: string) => {
+    if (!confirm(`Tem certeza que deseja deletar a política "${filename}"?`)) return;
+    try {
+      const res = await fetch(`/api/policies/${filename}`, { method: 'DELETE' });
+      if (res.ok) {
+        loadLocalPolicies();
+      }
+    } catch (err) {
+      console.error('Falha ao deletar política:', err);
+    }
+  };
+
   // CLI update & reinstall state
   const [isUpdatingCli, setIsUpdatingCli] = useState(false);
   const [updateCliResult, setUpdateCliResult] = useState<{ success: boolean; message: string; version?: string; globalNotice?: string } | null>(null);
@@ -270,6 +320,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen && activeTab === 'policies') {
+      loadLocalPolicies();
+    }
+  }, [isOpen, activeTab]);
+
   if (!isOpen) return null;
 
   const handleBuildPackage = async () => {
@@ -345,6 +401,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               { id: 'skills', label: 'Skills (4)', icon: Sparkles },
               { id: 'commands', label: 'Comandos (6)', icon: Code2 },
               { id: 'mcp', label: 'MCP (GitHub)', icon: Layers },
+              { id: 'policies', label: 'Policies (Engine)', icon: ShieldCheck },
               { id: 'hooks', label: cliStatus?.version ? `Hooks (${cliStatus.version})` : 'Hooks', icon: Sliders },
               { id: 'permissions', label: 'Permissões & Modos', icon: Shield },
               { id: 'interface', label: 'Interface e Aparência', icon: Paintbrush },
@@ -1416,7 +1473,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
 
                         <div className="text-xs font-mono bg-white dark:bg-zinc-900 p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300">
-                          {server.command} {server.args.join(' ')}
+                          {server.command ? (
+                            <span>{server.command} {server.args?.join(' ')}</span>
+                          ) : server.httpUrl ? (
+                            <span className="text-blue-600 dark:text-blue-400">HTTP: {server.httpUrl}</span>
+                          ) : server.url ? (
+                            <span className="text-emerald-600 dark:text-emerald-400">SSE: {server.url}</span>
+                          ) : (
+                            <span className="text-zinc-400 italic">Sem configuração</span>
+                          )}
                         </div>
 
                         {testState && (
@@ -1428,11 +1493,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             }`}
                           >
                             {testState.success ? (
-                              <CheckCircle2 className="w-4 h-4 shrink-0" />
+                              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
                             ) : (
-                              <AlertTriangle className="w-4 h-4 shrink-0" />
+                              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                             )}
-                            <span>{testState.message}</span>
+                            <div className="flex-1 overflow-auto max-h-48 whitespace-pre-wrap font-mono text-[10px]">
+                              {testState.message}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1466,10 +1533,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-zinc-500 mb-1 font-semibold">Comando Executável</label>
+                          <label className="block text-zinc-500 mb-1 font-semibold">Comando Executável (Stdio)</label>
                           <input
                             type="text"
-                            value={editingMcp.command}
+                            value={editingMcp.command || ''}
                             onChange={(e) => setEditingMcp({ ...editingMcp, command: e.target.value })}
                             className="w-full px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono"
                             placeholder="ex: npx, node, python3"
@@ -1478,11 +1545,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div>
                           <label className="block text-zinc-500 mb-1 font-semibold">Argumentos (Um por linha)</label>
                           <textarea
-                            rows={4}
-                            value={editingMcp.args.join('\n')}
+                            rows={2}
+                            value={editingMcp.args?.join('\n') || ''}
                             onChange={(e) => setEditingMcp({ ...editingMcp, args: e.target.value.split('\n') })}
                             className="w-full px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono"
                             placeholder="-y&#10;@modelcontextprotocol/server-github"
+                          />
+                        </div>
+                        <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                          <label className="block text-zinc-500 mb-1 font-semibold">HTTP URL (Streamable HTTP)</label>
+                          <input
+                            type="text"
+                            value={editingMcp.httpUrl || ''}
+                            onChange={(e) => setEditingMcp({ ...editingMcp, httpUrl: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono"
+                            placeholder="http://localhost:3001/mcp"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-zinc-500 mb-1 font-semibold">SSE URL (Server-Sent Events)</label>
+                          <input
+                            type="text"
+                            value={editingMcp.url || ''}
+                            onChange={(e) => setEditingMcp({ ...editingMcp, url: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono"
+                            placeholder="http://localhost:3000/sse"
                           />
                         </div>
                         <div className="flex items-center gap-2 pt-1">
@@ -1504,7 +1591,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           Cancelar
                         </button>
                         <button
-                          disabled={!editingMcp.name || !editingMcp.command}
+                          disabled={!editingMcp.name || (!editingMcp.command && !editingMcp.httpUrl && !editingMcp.url)}
                           onClick={async () => {
                             let newList: McpConfig[];
                             if (isNewMcp) {
@@ -1518,6 +1605,151 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white disabled:opacity-50"
                         >
                           Salvar Servidor MCP
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 7. POLICIES */}
+            {activeTab === 'policies' && (
+              <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                      Motor de Políticas (Policy Engine)
+                    </h4>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Defina regras de segurança e governança para ferramentas em <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">.gemini/policies/*.toml</code>
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingPolicy({ filename: 'nova-politica.toml', content: '[[rule]]\ntoolName = "*"\ndecision = "ask_user"\npriority = 10\n' });
+                      setOriginalFilename(null);
+                      setIsNewPolicy(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Nova Política
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {policies.map((policy) => (
+                    <div
+                      key={policy.filename}
+                      className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 truncate pr-2">
+                            {policy.filename}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingPolicy({ ...policy });
+                                setOriginalFilename(policy.filename);
+                                setIsNewPolicy(false);
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 transition"
+                              title="Editar Política"
+                            >
+                              <Code2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeletePolicy(policy.filename)}
+                              className="p-1.5 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/30 text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 transition"
+                              title="Deletar Política"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="text-[11px] font-mono text-zinc-500 bg-white dark:bg-zinc-900 p-2.5 rounded-lg border border-zinc-100 dark:border-zinc-800 line-clamp-4 overflow-hidden whitespace-pre">
+                          {policy.content}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {policies.length === 0 && (
+                    <div className="col-span-2 py-12 flex flex-col items-center justify-center text-zinc-400 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl">
+                      <ShieldCheck className="w-8 h-8 mb-2 opacity-20" />
+                      <p className="text-xs">Nenhuma política personalizada encontrada.</p>
+                      <p className="text-[10px] mt-1 italic">Crie arquivos .toml para restringir ou autorizar ferramentas.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Edit Policy Modal */}
+                {editingPolicy && (
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-2xl p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                          <h4 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
+                            {isNewPolicy ? 'Criar Nova Política' : 'Editar Política'}
+                          </h4>
+                        </div>
+                        <button onClick={() => setEditingPolicy(null)} className="text-zinc-400 hover:text-zinc-600 transition">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5">
+                            Nome do Arquivo (Deve terminar em .toml)
+                          </label>
+                          <input
+                            type="text"
+                            value={editingPolicy.filename}
+                            onChange={(e) => setEditingPolicy({ ...editingPolicy, filename: e.target.value })}
+                            className="w-full px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono text-xs text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-emerald-500/20 outline-none transition"
+                            placeholder="ex: restrict-shell.toml"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5">
+                            Conteúdo da Política (Sintaxe TOML)
+                          </label>
+                          <div className="relative">
+                            <textarea
+                              rows={12}
+                              value={editingPolicy.content}
+                              onChange={(e) => setEditingPolicy({ ...editingPolicy, content: e.target.value })}
+                              className="w-full px-4 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono text-xs text-zinc-800 dark:text-zinc-200 focus:ring-2 focus:ring-emerald-500/20 outline-none leading-relaxed transition"
+                              placeholder="[[rule]]&#10;toolName = '*'&#10;decision = 'ask_user'&#10;priority = 10"
+                            />
+                            <div className="absolute top-3 right-3 opacity-20 pointer-events-none">
+                              <Code2 className="w-10 h-10" />
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-zinc-500 mt-2 italic text-center">
+                            Sintaxe: [[rule]], toolName, decision (allow, deny, ask_user), priority, modes.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                        <button
+                          onClick={() => setEditingPolicy(null)}
+                          className="px-4 py-2 text-xs font-semibold text-zinc-500 hover:text-zinc-700 transition"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          disabled={!editingPolicy.filename || !editingPolicy.filename.endsWith('.toml')}
+                          onClick={() => handleSavePolicy(editingPolicy, originalFilename || undefined)}
+                          className="px-6 py-2 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition shadow-md"
+                        >
+                          Salvar Política
                         </button>
                       </div>
                     </div>

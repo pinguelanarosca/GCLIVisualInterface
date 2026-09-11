@@ -47,9 +47,12 @@ export const FilesAndDiffsView: React.FC<FilesAndDiffsViewProps> = ({
   const [result, setResult] = useState<FilesAndDiffsResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [selectedFileContent, setSelectedFileContent] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'diffs' | 'explorer'>('diffs');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [hasCopiedDiff, setHasCopiedDiff] = useState(false);
+  const [isReadingFile, setIsReadingFile] = useState(false);
 
   // Keep local path in sync if parent changes
   useEffect(() => {
@@ -58,6 +61,26 @@ export const FilesAndDiffsView: React.FC<FilesAndDiffsViewProps> = ({
       setInputDir(initialDir);
     }
   }, [initialDir]);
+
+  const fetchFileContent = async (filePath: string) => {
+    setIsReadingFile(true);
+    setSelectedDiffPath(null); // Clear diff selection
+    setSelectedFilePath(filePath);
+    try {
+      const res = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedFileContent(data.content);
+      } else {
+        setSelectedFileContent('Falha ao ler o conteúdo do arquivo.');
+      }
+    } catch (err) {
+      console.error('Error reading file:', err);
+      setSelectedFileContent('Erro ao ler o conteúdo do arquivo.');
+    } finally {
+      setIsReadingFile(false);
+    }
+  };
 
   const fetchFilesAndDiffs = async (dirToFetch: string) => {
     setIsLoading(true);
@@ -315,7 +338,11 @@ export const FilesAndDiffsView: React.FC<FilesAndDiffsViewProps> = ({
                   return (
                     <button
                       key={diff.path}
-                      onClick={() => setSelectedDiffPath(diff.path)}
+                      onClick={() => {
+                        setSelectedDiffPath(diff.path);
+                        setSelectedFilePath(null);
+                        setSelectedFileContent(null);
+                      }}
                       className={`w-full text-left p-2 rounded-lg text-xs flex items-center gap-2 transition ${
                         isSelected
                           ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-medium'
@@ -359,12 +386,16 @@ export const FilesAndDiffsView: React.FC<FilesAndDiffsViewProps> = ({
                       onClick={() => {
                         if (entry.isDirectory) {
                           handleNavigateSubdir(entry.path);
+                        } else {
+                          fetchFileContent(entry.path);
                         }
                       }}
                       className={`px-2 py-1.5 rounded-lg text-xs flex items-center justify-between gap-2 transition ${
                         entry.isDirectory
                           ? 'hover:bg-blue-50 dark:hover:bg-blue-950/30 text-blue-600 dark:text-blue-400 cursor-pointer font-medium'
-                          : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 font-mono text-[11px]'
+                          : entry.path === selectedFilePath
+                          ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 cursor-pointer font-mono text-[11px]'
+                          : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer font-mono text-[11px]'
                       }`}
                     >
                       <div className="flex items-center gap-2 truncate">
@@ -388,9 +419,15 @@ export const FilesAndDiffsView: React.FC<FilesAndDiffsViewProps> = ({
                       onClick={() => {
                         if (file.endsWith('/')) {
                           handleNavigateSubdir(`${selectedDir}/${file.slice(0, -1)}`);
+                        } else {
+                          fetchFileContent(`${selectedDir}/${file}`);
                         }
                       }}
-                      className="px-2 py-1 text-[11px] font-mono text-zinc-600 dark:text-zinc-400 rounded flex items-center gap-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                      className={`px-2 py-1 text-[11px] font-mono rounded flex items-center gap-2 transition cursor-pointer ${
+                        (selectedDir + '/' + file) === selectedFilePath
+                          ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
+                          : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                      }`}
                     >
                       {file.endsWith('/') ? (
                         <Folder className="w-3.5 h-3.5 text-blue-400 shrink-0" />
@@ -404,9 +441,9 @@ export const FilesAndDiffsView: React.FC<FilesAndDiffsViewProps> = ({
           )}
         </div>
 
-        {/* Right Panel: Unified Diff Viewer */}
+        {/* Right Panel: Unified Diff & File Viewer */}
         <div className="flex-1 flex flex-col overflow-hidden bg-zinc-950 text-zinc-100 font-mono text-xs">
-          {activeDiff ? (
+          {activeDiff && !selectedFilePath ? (
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="h-10 px-4 flex items-center justify-between border-b border-zinc-800 bg-zinc-900/90 shrink-0">
                 <div className="flex items-center gap-2">
@@ -431,7 +468,7 @@ export const FilesAndDiffsView: React.FC<FilesAndDiffsViewProps> = ({
                     {hasCopiedDiff ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                     <span>{hasCopiedDiff ? 'Copiado' : 'Copiar Diff'}</span>
                   </button>
-                  <span className="text-[11px] text-zinc-500">Diff real Git</span>
+                  <span className="text-[11px] text-zinc-500">Visualização Git</span>
                 </div>
               </div>
 
@@ -454,15 +491,55 @@ export const FilesAndDiffsView: React.FC<FilesAndDiffsViewProps> = ({
                 })}
               </div>
             </div>
+          ) : selectedFilePath ? (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="h-10 px-4 flex items-center justify-between border-b border-zinc-800 bg-zinc-900/90 shrink-0">
+                <div className="flex items-center gap-2">
+                  <FileCode className="w-4 h-4 text-zinc-400" />
+                  <span className="font-semibold text-zinc-200 truncate max-w-md">
+                    {selectedFilePath.split('/').pop()}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded uppercase">Preview</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (selectedFileContent) {
+                        navigator.clipboard.writeText(selectedFileContent);
+                        setHasCopiedDiff(true);
+                        setTimeout(() => setHasCopiedDiff(false), 2000);
+                      }
+                    }}
+                    className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded bg-zinc-800/60 hover:bg-zinc-800 transition"
+                  >
+                    {hasCopiedDiff ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    <span>{hasCopiedDiff ? 'Copiado' : 'Copiar Tudo'}</span>
+                  </button>
+                  <span className="text-[11px] text-zinc-500">Conteúdo do Arquivo</span>
+                </div>
+              </div>
+              
+              <div className="flex-1 overflow-auto p-4 leading-relaxed font-mono relative">
+                {isReadingFile ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/50">
+                    <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
+                  </div>
+                ) : (
+                  <pre className="text-zinc-300 text-[11px] whitespace-pre-wrap break-all">
+                    {selectedFileContent || 'Arquivo vazio.'}
+                  </pre>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-zinc-500 space-y-3">
               <FileQuestion className="w-12 h-12 text-zinc-600 opacity-60" />
               <div>
                 <p className="text-sm font-semibold text-zinc-400">
-                  Nenhum diff selecionado
+                  Selecione um item para visualizar
                 </p>
                 <p className="text-xs text-zinc-500 max-w-sm mt-1">
-                  Selecione um arquivo alterado na barra lateral esquerda ou navegue pelas pastas usando a aba Explorador.
+                  Clique em um arquivo alterado (Diffs) ou navegue pelo Explorador para ver o conteúdo de qualquer arquivo.
                 </p>
               </div>
             </div>

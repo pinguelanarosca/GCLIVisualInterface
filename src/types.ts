@@ -65,10 +65,17 @@ export interface CommandConfig {
   statusGrade: StatusGrade;
 }
 
+export interface PolicyConfig {
+  filename: string;
+  content: string;
+}
+
 export interface McpConfig {
   name: string;
-  command: string;
-  args: string[];
+  command?: string;
+  args?: string[];
+  httpUrl?: string;
+  url?: string;
   env?: Record<string, string>;
   enabled: boolean;
   status: 'connected' | 'stopped' | 'error' | 'unknown';
@@ -112,6 +119,12 @@ export interface ToolCallStep {
   error?: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'requires_approval';
   timestamp: string;
+  description?: string;
+  schema?: any;
+  componentRegister?: string;
+  componentExecutor?: string;
+  origin?: string;
+  wrapperRelation?: string;
 }
 
 export interface ChatMessage {

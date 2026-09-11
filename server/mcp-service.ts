@@ -38,8 +38,10 @@ export function loadMcpSettings(targetDir?: string): McpConfig[] {
     for (const [name, server] of Object.entries<any>(mcpServers)) {
       list.push({
         name,
-        command: server.command || 'npx',
+        command: server.command,
         args: server.args || [],
+        httpUrl: server.httpUrl,
+        url: server.url,
         env: server.env || {},
         enabled: server.enabled !== false,
         status: 'stopped',
@@ -76,11 +78,16 @@ export function saveMcpSettings(servers: McpConfig[], targetDir?: string) {
   const mcpServers: Record<string, any> = {};
   for (const s of servers) {
     if (s.enabled !== false) {
-      mcpServers[s.name] = {
-        command: s.command,
-        args: s.args,
+      const serverConfig: any = {
         env: s.env || {},
       };
+
+      if (s.command) serverConfig.command = s.command;
+      if (s.args && s.args.length > 0) serverConfig.args = s.args;
+      if (s.httpUrl) serverConfig.httpUrl = s.httpUrl;
+      if (s.url) serverConfig.url = s.url;
+
+      mcpServers[s.name] = serverConfig;
     }
   }
 
@@ -89,10 +96,41 @@ export function saveMcpSettings(servers: McpConfig[], targetDir?: string) {
 }
 
 export async function testMcpServer(mcp: McpConfig): Promise<{ success: boolean; message: string }> {
+  // Case 1: URL / httpUrl (Remote SSE or HTTP MCP)
+  if (mcp.httpUrl || mcp.url) {
+    const targetUrl = mcp.httpUrl || mcp.url;
+    try {
+      // Basic heartbeat test
+      const res = await fetch(targetUrl!, { method: 'GET' });
+      if (res.ok || res.status === 405 || res.status === 404) {
+        // Some MCP servers might return 405 Method Not Allowed or 404 for GET,
+        // but if the server is there, it's a good sign.
+        return {
+          success: true,
+          message: `Servidor MCP remoto detectado em ${targetUrl} (Status: ${res.status}).`,
+        };
+      }
+      return {
+        success: false,
+        message: `Servidor MCP remoto retornou status de erro em ${targetUrl}: ${res.status}`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Falha ao conectar no servidor MCP remoto em ${targetUrl}: ${err.message}`,
+      };
+    }
+  }
+
+  // Case 2: Standard Command (Stdio MCP)
+  if (!mcp.command) {
+    return { success: false, message: 'Nenhum comando ou URL configurado para este MCP.' };
+  }
+
   return new Promise((resolve) => {
     try {
       // Test running the binary / command with a timeout
-      const child = spawn(mcp.command, [...mcp.args, '--help'], {
+      const child = spawn(mcp.command!, [...(mcp.args || []), '--help'], {
         env: { ...process.env, ...mcp.env },
       });
 
@@ -110,15 +148,15 @@ export async function testMcpServer(mcp: McpConfig): Promise<{ success: boolean;
         child.kill();
         resolve({
           success: true,
-          message: 'Processo MCP iniciou corretamente (teste de heartbeat finalizado).',
+          message: `Processo MCP iniciou corretamente.\n\nSaída:\n${output}\n${errorOutput}`.trim(),
         });
-      }, 3500);
+      }, 5000);
 
       child.on('error', (err) => {
         clearTimeout(timer);
         resolve({
           success: false,
-          message: `Falha ao executar ${mcp.command}: ${err.message}`,
+          message: `Falha ao executar ${mcp.command}: ${err.message}\n\nErro:\n${errorOutput}`.trim(),
         });
       });
 
@@ -127,12 +165,12 @@ export async function testMcpServer(mcp: McpConfig): Promise<{ success: boolean;
         if (code === 0 || output.length > 0) {
           resolve({
             success: true,
-            message: `Servidor MCP respondeu com êxito (código ${code}).`,
+            message: `Servidor MCP respondeu com êxito (código ${code}).\n\nSaída:\n${output}\n${errorOutput}`.trim(),
           });
         } else {
           resolve({
             success: false,
-            message: errorOutput || `Servidor MCP encerrou com código de saída ${code}.`,
+            message: `Servidor MCP encerrou com código de saída ${code}.\n\nErro:\n${errorOutput}`,
           });
         }
       });

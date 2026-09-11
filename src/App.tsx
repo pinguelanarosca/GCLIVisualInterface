@@ -82,6 +82,7 @@ export function App() {
   const [currentSessionId, setCurrentSessionId] = useState<string>(generateSessionId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Modals state
   const [isDirsModalOpen, setIsDirsModalOpen] = useState(false);
@@ -291,9 +292,14 @@ export function App() {
     const rawEventsList: any[] = [];
 
     try {
+      // Execute CLI
+      const ctrl = new AbortController();
+      abortControllerRef.current = ctrl;
+
       const response = await fetch('/api/cli/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: ctrl.signal,
         body: JSON.stringify({
           prompt: promptText,
           model: currentAgent?.model,
@@ -352,16 +358,22 @@ export function App() {
                   assistantContent += eventPayload.content;
                 }
               } else if (eventPayload.type === 'tool_use') {
-                const callId = eventPayload.tool_call_id || `tool_${Date.now()}`;
+                const callId = eventPayload.tool_call_id || eventPayload.tool_id || `tool_${Date.now()}`;
                 toolCalls[callId] = {
                   id: callId,
-                  toolName: eventPayload.name || 'tool',
+                  toolName: eventPayload.tool_name || eventPayload.name || eventPayload.id || eventPayload.tool || 'tool',
                   parameters: eventPayload.parameters || {},
                   status: 'running',
                   timestamp: new Date().toISOString(),
+                  description: eventPayload.description,
+                  schema: eventPayload.schema || eventPayload.definition,
+                  componentRegister: eventPayload.componentRegister || eventPayload.registered_by,
+                  componentExecutor: eventPayload.componentExecutor || eventPayload.executed_by,
+                  origin: eventPayload.origin || eventPayload.source,
+                  wrapperRelation: eventPayload.wrapperRelation || eventPayload.wrapper,
                 };
               } else if (eventPayload.type === 'tool_result') {
-                const callId = eventPayload.tool_call_id;
+                const callId = eventPayload.tool_call_id || eventPayload.tool_id;
                 if (callId && toolCalls[callId]) {
                   toolCalls[callId].result = eventPayload.output || '';
                   toolCalls[callId].status = eventPayload.error ? 'failed' : 'completed';
@@ -514,11 +526,33 @@ export function App() {
       );
     } finally {
       setIsStreaming(false);
+      abortControllerRef.current = null;
     }
   };
 
   const handleCancelExecution = async () => {
+    // 1. Immediately abort the client-side fetch request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    // 2. Reset UI state instantly
+    setIsStreaming(false);
+
+    // 3. Mark the streaming message as finished in the UI
+    setMessages((prev) => {
+      const lastMsg = prev[prev.length - 1];
+      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+        return prev.map((m, idx) =>
+          idx === prev.length - 1 ? { ...m, isStreaming: false } : m
+        );
+      }
+      return prev;
+    });
+
     try {
+      // 4. Notify backend to kill the process
       await fetch('/api/cli/cancel', { method: 'POST' });
     } catch (err) {
       console.error('Failed to cancel CLI execution:', err);
@@ -948,6 +982,7 @@ export function App() {
         isCheckingStatus={isCheckingStatus}
         messages={messages}
         isStreaming={isStreaming}
+        onCancelExecution={handleCancelExecution}
         authorizedDirs={authorizedDirs}
         skills={skills}
         mcpServers={mcpServers}

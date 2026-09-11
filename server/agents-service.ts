@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { AgentConfig } from '../src/types.js';
+import { sysLog } from './logger-service.js';
 
 const DEFAULT_AGENTS: AgentConfig[] = [
   {
@@ -186,6 +187,8 @@ export function ensureAgentsSeeded(targetDir?: string): AgentConfig[] {
       saveAgentToFile(defaultAgent, targetDir);
     }
   }
+  
+  syncAgentsToSettings();
 
   return loadAgents(targetDir);
 }
@@ -278,6 +281,39 @@ export function saveAgentToFile(agent: AgentConfig, targetDir?: string) {
     kind: agent.kind,
   };
   saveMetadata(metadata, targetDir);
+
+  // Atualizar dinamicamente o settings.json do Gemini CLI para propagar configurações do agente via overrideScope
+  try {
+    const settingsPath = path.join(process.cwd(), '.gemini', 'settings.json');
+    let settings: any = { mcpServers: {}, modelConfigs: { overrides: [] } };
+    if (fs.existsSync(settingsPath)) {
+      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    }
+
+    if (!settings.modelConfigs) settings.modelConfigs = { overrides: [] };
+    if (!settings.modelConfigs.overrides) settings.modelConfigs.overrides = [];
+
+    // Remover override existente para este agente para não duplicar
+    settings.modelConfigs.overrides = settings.modelConfigs.overrides.filter(
+      (o: any) => o.match?.overrideScope !== agent.name
+    );
+
+    settings.modelConfigs.overrides.push({
+      match: { overrideScope: agent.name },
+      modelConfig: {
+        generateContentConfig: {
+          temperature: agent.temperature,
+          topP: agent.topP,
+          topK: agent.topK,
+          thinkingConfig: agent.thinking ? { includeThoughts: true } : undefined,
+        },
+      },
+    });
+
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+  } catch (err) {
+    sysLog.error('AGENT', `Erro ao atualizar settings.json: ${err}`);
+  }
 }
 
 export function deleteAgent(name: string, targetDir?: string): boolean {
@@ -354,5 +390,41 @@ export function resetAllAgentsToDefault(targetDir?: string): AgentConfig[] {
     saveAgentToFile(agent, targetDir);
   }
   return loadAgents(targetDir);
+}
+
+export function syncAgentsToSettings() {
+  try {
+    const metadata = loadMetadata();
+    const settingsPath = path.join(process.cwd(), '.gemini', 'settings.json');
+    let settings: any = { mcpServers: {}, modelConfigs: { overrides: [] } };
+    if (fs.existsSync(settingsPath)) {
+      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    }
+
+    if (!settings.modelConfigs) settings.modelConfigs = { overrides: [] };
+    if (!settings.modelConfigs.overrides) settings.modelConfigs.overrides = [];
+
+    // Clear and rebuild overrides based on metadata
+    settings.modelConfigs.overrides = [];
+
+    for (const [name, agent] of Object.entries(metadata)) {
+        const agentData = agent as any;
+        settings.modelConfigs.overrides.push({
+            match: { overrideScope: name },
+            modelConfig: {
+                generateContentConfig: {
+                    temperature: agentData.temperature,
+                    topP: agentData.topP,
+                    topK: agentData.topK,
+                    thinkingConfig: agentData.thinking ? { includeThoughts: true } : undefined,
+                },
+            },
+        });
+    }
+
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+  } catch (err) {
+    sysLog.error('AGENT', `Erro ao sincronizar agents com settings.json: ${err}`);
+  }
 }
 

@@ -7,6 +7,8 @@ import { CliStatus } from '../src/types.js';
 import { sysLog } from './logger-service.js';
 
 let activeChildProcess: ChildProcess | null = null;
+let currentRetryTimeout: NodeJS.Timeout | null = null;
+let isCancelled = false;
 let currentCustomCliPath: string = '';
 
 export function getLocalCliPath(): string {
@@ -158,16 +160,30 @@ export async function validateGeminiApiKey(
       break; // Success!
     } catch (err: any) {
       lastError = err;
+      const status = err.status || err.response?.status;
+      const msg = (err.message || '').toLowerCase();
+      
+      if (status === 429 || status === 503 || msg.includes('429') || msg.includes('503') || msg.includes('quota') || msg.includes('rate limit') || msg.includes('resource_exhausted') || msg.includes('unavailable')) {
+        sysLog.warn('API', `Validação do modelo ${model} retornou indisponibilidade temporária (${status || 'n/a'}): ${err.message || err}`);
+        validatedModel = `${model} (temporariamente indisponível)`;
+        break; // Connectivity successful!
+      }
+      
       sysLog.warn('API', `Falha ao validar modelo ${model}: ${err.message || err}`);
     }
   }
 
   if (validatedModel) {
     const latencyMs = Date.now() - startTime;
+    const isUnavailable = validatedModel.includes('(temporariamente indisponível)');
+    const message = isUnavailable
+      ? `API conectada — recurso temporariamente indisponível (${validatedModel.replace(' (temporariamente indisponível)', '')}).`
+      : `Chave GEMINI_API_KEY ativa e validada com sucesso no Google Gemini API (${validatedModel}).`;
+    
     const res = {
       configured: true,
       valid: true,
-      message: `Chave GEMINI_API_KEY ativa e validada com sucesso no Google Gemini API (${validatedModel}).`,
+      message,
       modelTested: validatedModel,
       latencyMs,
     };
@@ -417,10 +433,17 @@ export const AGENT_FALLBACK_CHAINS: Record<string, string[]> = {
 
 export function getApiErrorCode(code: number, stderrText: string, reportedErrorText: string): number | null {
   const combined = (stderrText + ' ' + reportedErrorText).toLowerCase();
+  
+  // High priority: literal status codes
+  const statusMatch = combined.match(/status (?:code )?([0-9]{3})/i);
+  if (statusMatch) {
+    return parseInt(statusMatch[1], 10);
+  }
+
   if (combined.includes('409') || combined.includes('conflict') || combined.includes('already_exists')) {
     return 409;
   }
-  if (combined.includes('429') || combined.includes('quota') || combined.includes('rate limit') || combined.includes('terminalquotaerror')) {
+  if (combined.includes('429') || combined.includes('quota') || combined.includes('rate limit') || combined.includes('terminalquotaerror') || combined.includes('resource_exhausted')) {
     return 429;
   }
   if (combined.includes('500') || combined.includes('internal error') || combined.includes('internal server error')) {
@@ -430,6 +453,25 @@ export function getApiErrorCode(code: number, stderrText: string, reportedErrorT
     return 503;
   }
   return null;
+}
+
+function parseQuotaDetails(stderr: string, reported: string): { origin: string, retryAfter?: number } {
+  const combined = stderr + ' ' + reported;
+  let origin = 'API do Google Gemini';
+  let retryAfter: number | undefined;
+
+  if (combined.includes('project')) origin = 'Cota do Projeto (GCP)';
+  else if (combined.includes('model')) origin = 'Limite do Modelo';
+  else if (combined.includes('tool')) origin = 'Ferramenta Externo';
+
+  const retryMatch = combined.match(/retry in ([0-9.]+)(s|ms)?/i);
+  if (retryMatch) {
+    const val = parseFloat(retryMatch[1]);
+    const unit = retryMatch[2] || 's';
+    retryAfter = unit === 'ms' ? val : val * 1000;
+  }
+
+  return { origin, retryAfter };
 }
 
 export function executeGeminiCli(
@@ -442,6 +484,17 @@ export function executeGeminiCli(
     fallbackChain?: string[];
   }
 ): { cancel: () => void } {
+  // Reset cancellation state on new execution (not a retry)
+  if (!isRetry) {
+    isCancelled = false;
+  }
+
+  // Abort immediately if already cancelled
+  if (isCancelled) {
+    sysLog.warn('CLI', 'Execução ignorada pois o estado atual é cancelado.');
+    return { cancel: () => {} };
+  }
+
   let cliPath = getResolvedCliPath();
 
   let cwd = params.workDir || (params.authorizedDirs && params.authorizedDirs[0]) || process.cwd();
@@ -459,6 +512,7 @@ export function executeGeminiCli(
   }
 
   const args: string[] = [
+    '--debug',
     '-p', finalPrompt,
     '-o', 'stream-json',
     '--skip-trust',
@@ -520,6 +574,8 @@ export function executeGeminiCli(
     NO_COLOR: '1',
     FORCE_COLOR: '0',
     GEMINI_CLI_TRUST_WORKSPACE: 'true',
+    GEMINI_MAX_RETRIES: '0',
+    MAX_RETRIES: '0',
   };
 
   const child = spawn(cliPath, args, {
@@ -571,10 +627,28 @@ export function executeGeminiCli(
     }
   });
 
+  // Ensure logs directory exists
+  const logsDir = path.join(process.cwd(), '.gemini', 'logs');
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+  const debugLogPath = path.join(logsDir, 'cli-debug.log');
+  fs.writeFileSync(debugLogPath, ''); // Clear log file
+
   child.stderr?.on('data', (chunk) => {
     const raw = chunk.toString();
     stderrText += raw;
-    params.onEvent({ type: 'stderr_raw', data: { text: raw } });
+    fs.appendFileSync(debugLogPath, raw);
+  });
+
+  child.on('close', (code) => {
+    params.onEvent({ 
+      type: 'stderr_debug_complete', 
+      data: { 
+        text: stderrText, 
+        logFile: debugLogPath 
+      } 
+    });
   });
 
   child.on('error', (err: any) => {
@@ -597,6 +671,14 @@ export function executeGeminiCli(
   });
 
   child.on('close', (code, signal) => {
+    activeChildProcess = null;
+
+    if (isCancelled) {
+      sysLog.warn('CLI', 'Processo encerrado, mas a execução já foi cancelada pelo usuário. Ignorando processamento de saída.');
+      params.onDone(code || 0, signal || 'SIGINT');
+      return;
+    }
+
     // If Gemini CLI exited with code 42 due to session collision/missing session, auto-retry with correct params
     if (code === 42 && params.sessionId && !isRetry) {
       const isMissingSession = stderrText.includes('No previous sessions found') || 
@@ -633,37 +715,52 @@ export function executeGeminiCli(
         stderrText.includes('TerminalQuotaError') ||
         stderrText.includes('Quota exceeded') ||
         stderrText.includes('429') ||
+        stderrText.includes('RESOURCE_EXHAUSTED') ||
         reportedErrorText.toLowerCase().includes('quota') ||
-        reportedErrorText.includes('429');
+        reportedErrorText.includes('429') ||
+        reportedErrorText.includes('RESOURCE_EXHAUSTED');
 
       const apiErrCode = getApiErrorCode(code, stderrText, reportedErrorText);
 
       if (apiErrCode !== null) {
-        if (retryCount < 3) {
+        // Only retry if not a "Hard Quota" or if explicitly allowed
+        const { origin, retryAfter } = parseQuotaDetails(stderrText, reportedErrorText);
+        const isTransient = apiErrCode === 500 || apiErrCode === 503 || (apiErrCode === 429 && !stderrText.includes('Hard Limit'));
+
+        if (isTransient && retryCount < 3) {
           const nextRetry = retryCount + 1;
-          const backoffDelay = 1500 * retryCount;
+          const backoffDelay = retryAfter || (Math.pow(2, retryCount) * 1000 + Math.random() * 500);
+          
           params.onEvent({
             type: 'stream_event',
             data: {
               type: 'message',
               role: 'assistant',
-              content: `\n⚠️ *[Tentativa ${retryCount}/3] Falha com status HTTP ${apiErrCode}. Retentando no modelo ${chosenModel} em ${backoffDelay / 1000}s...*\n\n`,
+              content: `\n⚠️ *[Tentativa ${retryCount}/3] Falha temporária (${apiErrCode}) em ${origin}. Retentando no modelo ${chosenModel} em ${Math.round(backoffDelay / 100) / 10}s...*\n\n`,
             },
           });
-          sysLog.warn('CLI', `Falha temporária com status ${apiErrCode} no modelo ${chosenModel}. Agendando tentativa ${nextRetry}/3 em ${backoffDelay}ms.`);
-          activeChildProcess = null;
-          setTimeout(() => {
-            executeGeminiCli(params, true, {
-              currentModel: chosenModel,
-              retryCount: nextRetry,
-              fallbackIndex,
-              fallbackChain,
-            });
+          
+          sysLog.warn('CLI', `Falha temporária (${apiErrCode}) em ${origin} [Modelo: ${chosenModel}]. Tentativa ${nextRetry}/3 em ${Math.round(backoffDelay)}ms.`, {
+            retryAfter,
+            origin,
+            apiErrCode
+          });
+
+          currentRetryTimeout = setTimeout(() => {
+            currentRetryTimeout = null;
+            if (!isCancelled) {
+              executeGeminiCli(params, true, {
+                currentModel: chosenModel,
+                retryCount: nextRetry,
+                fallbackIndex,
+                fallbackChain,
+              });
+            }
           }, backoffDelay);
           return;
         } else {
-          // 3 attempts have failed. Time for fallback!
-          if (fallbackChain && fallbackChain.length > 0) {
+          // 3 attempts have failed OR non-transient error. Time for fallback!
+          if (fallbackChain && fallbackChain.length > 0 && !isCancelled) {
             const nextIdx = fallbackIndex + 1;
             if (nextIdx < fallbackChain.length) {
               const nextModel = fallbackChain[nextIdx];
@@ -676,33 +773,36 @@ export function executeGeminiCli(
                 },
               });
               sysLog.warn('CLI', `3 tentativas falharam no modelo ${chosenModel}. Alternando para o fallback ${nextModel} do agente ${agentId}.`);
-              activeChildProcess = null;
-              setTimeout(() => {
-                executeGeminiCli(params, true, {
-                  currentModel: nextModel,
-                  retryCount: 1,
-                  fallbackIndex: nextIdx,
-                  fallbackChain,
-                });
+              
+              currentRetryTimeout = setTimeout(() => {
+                currentRetryTimeout = null;
+                if (!isCancelled) {
+                  executeGeminiCli(params, true, {
+                    currentModel: nextModel,
+                    retryCount: 1,
+                    fallbackIndex: nextIdx,
+                    fallbackChain,
+                  });
+                }
               }, 2000);
               return;
             }
           }
           // Exhausted all retries and fallbacks
-          sysLog.error('CLI', `Todos os modelos de fallback falharam para o agente ${agentId}. Interrompendo tarefa.`);
+          sysLog.error('CLI', `Todos os modelos de fallback falharam para o agente ${agentId}. Interrompendo tarefa (Erro: ${apiErrCode}, Origem: ${origin}).`);
           params.onEvent({
             type: 'stream_event',
             data: {
               type: 'message',
               role: 'assistant',
-              content: `\n❌ *[Erro Crítico] Todos os modelos de fallback falharam para o agente ${agentId}. A execução foi interrompida devido à indisponibilidade persistente do serviço (Status: ${apiErrCode}).*\n\n`,
+              content: `\n❌ *[Erro Crítico] Todos os modelos de fallback falharam para o agente ${agentId}.*\n\n**Causa:** ${origin} (Status ${apiErrCode})\n**Detalhes:** ${reportedErrorText || 'Indisponibilidade persistente do serviço.'}\n\n`,
             },
           });
         }
       }
 
       // Default fallback catch-all if quota was exceeded on another model
-      if (isQuotaError && !isRetry && chosenModel !== 'gemini-3.5-flash-lite') {
+      if (isQuotaError && !isRetry && chosenModel !== 'gemini-3.5-flash-lite' && !isCancelled) {
         params.onEvent({
           type: 'stream_event',
           data: {
@@ -711,7 +811,6 @@ export function executeGeminiCli(
             content: '⚠️ *Limite gratuito do modelo atingido. Alternando automaticamente para Gemini 3.5 Flash-Lite para continuar sua solicitação...*\n\n',
           },
         });
-        activeChildProcess = null;
         executeGeminiCli({ ...params, model: 'gemini-3.5-flash-lite', resume: true }, true);
         return;
       }
@@ -722,13 +821,13 @@ export function executeGeminiCli(
       } else if (stderrText.includes('Please set an Auth method') || stderrText.includes('GEMINI_API_KEY')) {
         finalMessage = 'A chave de API do Gemini (GEMINI_API_KEY) não está configurada no seu ambiente. Configure-a no menu de Configurações da GUI ou exporte a variável no terminal.';
       } else if (isQuotaError) {
-        const retryMatch = (stderrText + ' ' + reportedErrorText).match(/Please retry in ([0-9.]+s?)/i);
-        const retryTime = retryMatch ? ` em aproximadamente ${retryMatch[1]}` : ' em alguns instantes';
-        finalMessage = `⚠️ Cota da API do Gemini Excedida (Erro 429):
-Você atingiu o limite gratuito de requisições da sua conta para o modelo atual.
+        const { origin, retryAfter } = parseQuotaDetails(stderrText, reportedErrorText);
+        const retryTime = retryAfter ? ` em aproximadamente ${Math.round(retryAfter / 1000)}s` : ' em alguns instantes';
+        finalMessage = `⚠️ Cota Excedida (Erro 429) em: ${origin}
+Você atingiu o limite de requisições.
 • Tente novamente${retryTime}.
-• Recomendação: utilize o modelo "Gemini 3.5 Flash-Lite" no seletor de agentes para maior velocidade e limites de requisição.
-• Você também pode configurar sua chave de API própria no menu de Configurações ou em https://aistudio.google.com.`;
+• Recomendação: utilize o modelo "Gemini 3.5 Flash-Lite" para maiores limites.
+• Verifique se há processos em segundo plano consumindo sua cota.`;
       } else if (!finalMessage) {
         finalMessage = `O Gemini CLI encerrou com código de erro ${code}.`;
       }
@@ -753,20 +852,26 @@ Você atingiu o limite gratuito de requisições da sua conta para o modelo atua
 
   return {
     cancel: () => {
-      if (child && !child.killed) {
-        sysLog.warn('CLI', 'Execução cancelada via sinal SIGINT.');
-        child.kill('SIGINT');
-      }
+      cancelActiveExecution();
     },
   };
 }
 
 export function cancelActiveExecution(): boolean {
+  isCancelled = true;
+  
+  if (currentRetryTimeout) {
+    clearTimeout(currentRetryTimeout);
+    currentRetryTimeout = null;
+    sysLog.warn('CLI', 'Timeout de retry pendente cancelado pelo usuário.');
+  }
+
   if (activeChildProcess && !activeChildProcess.killed) {
-    sysLog.warn('CLI', 'Execução ativa do Gemini CLI cancelada pelo usuário.');
-    activeChildProcess.kill('SIGINT');
+    sysLog.warn('CLI', 'Execução ativa do Gemini CLI cancelada pelo usuário (Sinal SIGKILL).');
+    activeChildProcess.kill('SIGKILL');
     activeChildProcess = null;
     return true;
   }
-  return false;
+  
+  return isCancelled;
 }

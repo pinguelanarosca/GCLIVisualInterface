@@ -438,42 +438,97 @@ export const ChatView: React.FC<ChatViewProps> = ({
                             key={tc.id}
                             className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/40 overflow-hidden text-xs"
                           >
-                            <button
-                              onClick={() => toggleToolCall(tc.id)}
-                              className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-zinc-100/60 dark:hover:bg-zinc-800/40 transition"
-                            >
-                              <div className="flex items-center gap-2">
-                                <Terminal className="w-3.5 h-3.5 text-blue-500" />
-                                <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200">
-                                  {tc.toolName}
-                                </span>
-                                <span
-                                  className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold ${
-                                    tc.status === 'completed'
-                                      ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                                      : tc.status === 'running'
-                                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 animate-pulse'
-                                      : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400'
-                                  }`}
-                                >
-                                  {tc.status}
-                                </span>
-                              </div>
-                              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                            </button>
+                              <button
+                                onClick={() => toggleToolCall(tc.id)}
+                                className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-zinc-100/60 dark:hover:bg-zinc-800/40 transition"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className="group relative flex items-center gap-2">
+                                    <Terminal className="w-3.5 h-3.5 text-blue-500" />
+                                    <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200 cursor-help underline decoration-dotted decoration-zinc-300 dark:decoration-zinc-700 underline-offset-2">
+                                      {tc.toolName}
+                                    </span>
+                                    
+                                    {/* Transparency Tooltip */}
+                                    <div className="absolute bottom-full left-0 mb-2 w-80 p-3 bg-zinc-900 dark:bg-zinc-800 text-zinc-100 rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 border border-zinc-700/50 font-sans text-[10px] leading-relaxed backdrop-blur-md">
+                                      <div className="space-y-2.5">
+                                        <div className="flex items-center gap-2 border-b border-zinc-700/50 pb-1.5 mb-1.5">
+                                          <Terminal className="w-3 h-3 text-blue-400" />
+                                          <span className="font-bold uppercase tracking-tight text-zinc-400">Transparência de Execução</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                                          <div>
+                                            <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">ID Real</span>
+                                            <code className="text-blue-400 break-all font-mono">{tc.toolName}</code>
+                                          </div>
+                                          <div>
+                                            <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Origem</span>
+                                            <span className={tc.origin ? 'text-zinc-200' : 'text-zinc-500 italic'}>{tc.origin || 'Não disponível'}</span>
+                                          </div>
+                                          <div className="col-span-2">
+                                            <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Descrição</span>
+                                            <span className={tc.description ? 'text-zinc-200' : 'text-zinc-500 italic'}>{tc.description || 'Não disponível'}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Registro</span>
+                                            <span className={tc.componentRegister ? 'text-zinc-200' : 'text-zinc-500 italic'}>{tc.componentRegister || 'Não disponível'}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Executor</span>
+                                            <span className={tc.componentExecutor ? 'text-zinc-200' : 'text-zinc-500 italic'}>{tc.componentExecutor || 'Não disponível'}</span>
+                                          </div>
+                                          {tc.wrapperRelation && (
+                                            <div className="col-span-2">
+                                              <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Wrapper / Adapter</span>
+                                              <span className="text-zinc-200">{tc.wrapperRelation}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div>
+                                          <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Parâmetros Efetivos</span>
+                                          <pre className="text-emerald-400 overflow-x-auto max-h-24 p-1.5 bg-black/40 rounded-lg font-mono text-[9px] border border-white/5 whitespace-pre-wrap break-all">
+                                            {JSON.stringify(tc.parameters, null, 2)}
+                                          </pre>
+                                        </div>
+                                        {tc.schema && (
+                                          <div>
+                                            <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Schema / Definição</span>
+                                            <pre className="text-amber-400 overflow-x-auto max-h-24 p-1.5 bg-black/40 rounded-lg font-mono text-[9px] border border-white/5 whitespace-pre-wrap break-all">
+                                              {JSON.stringify(tc.schema, null, 2)}
+                                            </pre>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    
+                                    <span
+                                      className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold ${
+                                        tc.status === 'completed'
+                                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                                          : tc.status === 'running'
+                                          ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 animate-pulse'
+                                          : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400'
+                                      }`}
+                                    >
+                                      {tc.status}
+                                    </span>
+                                  </div>
+                                </div>
+                                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                              </button>
 
                             {isExpanded && (
                               <div className="p-3 border-t border-zinc-200/80 dark:border-zinc-800 font-mono text-[11px] bg-zinc-900 text-zinc-100 space-y-2 overflow-x-auto">
                                 <div>
                                   <span className="text-zinc-400 block mb-1">Parâmetros:</span>
-                                  <pre className="p-2 rounded bg-black/40 text-emerald-400">
+                                  <pre className="p-2 rounded bg-black/40 text-emerald-400 whitespace-pre-wrap break-all">
                                     {JSON.stringify(tc.parameters, null, 2)}
                                   </pre>
                                 </div>
                                 {tc.result && (
                                   <div>
                                     <span className="text-zinc-400 block mb-1">Resultado:</span>
-                                    <pre className="p-2 rounded bg-black/40 text-zinc-300 max-h-48 overflow-y-auto">
+                                    <pre className="p-2 rounded bg-black/40 text-zinc-300 max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
                                       {tc.result}
                                     </pre>
                                   </div>
