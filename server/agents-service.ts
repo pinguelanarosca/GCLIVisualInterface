@@ -11,11 +11,13 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     role: 'Principal/Orchestrator: coordenação, roteamento e consolidação.',
     model: 'gemini-3.5-flash-lite',
     description: 'Coordenação geral, decomposição de tarefas complexas, roteamento e consolidação dos resultados.',
-    systemInstructions: `Você é o Principal Orchestrator do Gemini CLI.
+    baseInstructions: `Você é o Principal Orchestrator do Gemini CLI.
 Sua função primária:
 - Coordenação de fluxos de trabalho.
 - Roteamento e delegação estruturada para agentes especializados (Investigator, Architect, Auditor, Tester, Worker).
 - Consolidação final das soluções validadas.`,
+    systemInstructions: '',
+    overrideBasePrompt: false,
     enabled: true,
     kind: 'local',
     tools: ['*'],
@@ -30,11 +32,13 @@ Sua função primária:
     role: 'Investigator: investigação, pesquisa e diagnóstico.',
     model: 'gemini-3.7-flash',
     description: 'Investigação profunda de código, pesquisa em fontes, rastreamento de bugs e diagnóstico com evidências.',
-    systemInstructions: `Você é o Investigator do Gemini CLI.
+    baseInstructions: `Você é o Investigator do Gemini CLI.
 Sua função primária:
 - Investigação, pesquisa de contexto e diagnóstico técnico.
 - Rastreamento de dependências e causas raízes com evidências empíricas.
 - Nunca emitir diagnóstico sem validação concreta.`,
+    systemInstructions: '',
+    overrideBasePrompt: false,
     enabled: true,
     kind: 'local',
     tools: ['*'],
@@ -49,11 +53,13 @@ Sua função primária:
     role: 'Architect: decisões arquiteturais e estruturais.',
     model: 'gemini-3.6-flash',
     description: 'Decisões de design de sistemas, modularidade, separação de responsabilidades e integridade estrutural.',
-    systemInstructions: `Você é o Architect do Gemini CLI.
+    baseInstructions: `Você é o Architect do Gemini CLI.
 Sua função primária:
 - Tomada de decisões arquiteturais e estruturais para o projeto.
 - Garantir coerência de padrões, modularidade e desacoplamento.
 - Avaliar trade-offs e prevenir débito técnico.`,
+    systemInstructions: '',
+    overrideBasePrompt: false,
     enabled: true,
     kind: 'local',
     tools: ['*'],
@@ -68,11 +74,13 @@ Sua função primária:
     role: 'Auditor: revisão crítica e identificação de problemas.',
     model: 'gemini-3.8-flash',
     description: 'Revisão crítica rigorosa de código, auditoria de segurança, detecção de regressões e vulnerabilidades.',
-    systemInstructions: `Você é o Auditor do Gemini CLI.
+    baseInstructions: `Você é o Auditor do Gemini CLI.
 Sua função primária:
 - Revisão crítica de alterações e código proposto.
 - Identificação de problemas de segurança, performance e regressão.
 - Priorização por impacto com apresentação de evidências.`,
+    systemInstructions: '',
+    overrideBasePrompt: false,
     enabled: true,
     kind: 'local',
     tools: ['*'],
@@ -87,11 +95,13 @@ Sua função primária:
     role: 'Tester: testes e validação.',
     model: 'gemini-3-flash',
     description: 'Desenvolvimento e execução de suítes de testes, validação de comportamentos e análise de falhas.',
-    systemInstructions: `Você é o Tester do Gemini CLI.
+    baseInstructions: `Você é o Tester do Gemini CLI.
 Sua função primária:
 - Identificação do comportamento esperado e criação de testes automatizados.
 - Execução de testes no ambiente real e análise de falhas.
 - Não declarar validação sem evidência de execução bem-sucedida.`,
+    systemInstructions: '',
+    overrideBasePrompt: false,
     enabled: true,
     kind: 'local',
     tools: ['*'],
@@ -106,11 +116,13 @@ Sua função primária:
     role: 'Worker: tarefas repetitivas e de alto volume.',
     model: 'gemini-3.1-flash-lite',
     description: 'Execução de tarefas repetitivas, geração de boilerplate, transformações em massa e refatorações diretas.',
-    systemInstructions: `Você é o Worker do Gemini CLI.
+    baseInstructions: `Você é o Worker do Gemini CLI.
 Sua função primária:
 - Execução rápida e precisa de tarefas repetitivas e de alto volume.
 - Aplicação de regras definidas pelos agentes de coordenação.
 - Foco em produtividade e consistência.`,
+    systemInstructions: '',
+    overrideBasePrompt: false,
     enabled: true,
     kind: 'local',
     tools: ['*'],
@@ -123,6 +135,27 @@ Sua função primária:
 export function getAgentsDirectory(customDir?: string): string {
   const base = customDir || process.cwd();
   return path.join(base, '.gemini', 'agents');
+}
+
+function getMetadataPath(targetDir?: string): string {
+  return path.join(getAgentsDirectory(targetDir), '.metadata.json');
+}
+
+function loadMetadata(targetDir?: string): Record<string, any> {
+  const metaPath = getMetadataPath(targetDir);
+  if (fs.existsSync(metaPath)) {
+    try {
+      return JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function saveMetadata(metadata: Record<string, any>, targetDir?: string) {
+  const metaPath = getMetadataPath(targetDir);
+  fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), 'utf8');
 }
 
 export function ensureAgentsSeeded(targetDir?: string): AgentConfig[] {
@@ -141,10 +174,15 @@ export function ensureAgentsSeeded(targetDir?: string): AgentConfig[] {
     // Ignore permissions in restricted containers
   }
 
+  const metadata = loadMetadata(targetDir);
+
   // Ensure each default agent exists on disk
   for (const defaultAgent of DEFAULT_AGENTS) {
     const agentFilePath = path.join(agentsDir, `${defaultAgent.name}.md`);
     if (!fs.existsSync(agentFilePath)) {
+      saveAgentToFile(defaultAgent, targetDir);
+    } else if (!metadata[defaultAgent.name]) {
+      // If file exists but metadata is missing, we need to save to populate metadata
       saveAgentToFile(defaultAgent, targetDir);
     }
   }
@@ -158,6 +196,7 @@ export function loadAgents(targetDir?: string): AgentConfig[] {
     fs.mkdirSync(agentsDir, { recursive: true });
   }
 
+  const metadata = loadMetadata(targetDir);
   const files = fs.readdirSync(agentsDir).filter((f) => f.endsWith('.md'));
   const loadedMap = new Map<string, AgentConfig>();
 
@@ -165,7 +204,9 @@ export function loadAgents(targetDir?: string): AgentConfig[] {
     const filePath = path.join(agentsDir, file);
     try {
       const content = fs.readFileSync(filePath, 'utf8');
-      const parsed = parseAgentMarkdown(content, file.replace(/\.md$/, ''));
+      const agentName = file.replace(/\.md$/, '');
+      const agentMeta = metadata[agentName] || {};
+      const parsed = parseAgentMarkdown(content, agentName, agentMeta);
       if (parsed) {
         // Respect the selected model without artificial restrictions
         if (!parsed.model) {
@@ -178,11 +219,16 @@ export function loadAgents(targetDir?: string): AgentConfig[] {
     }
   }
 
-  // Make sure all default agents are present so they NEVER disappear when selecting/editing one
+  // Make sure all default agents are present and have their base instructions
   for (const defaultAgent of DEFAULT_AGENTS) {
-    if (!loadedMap.has(defaultAgent.name)) {
+    const existing = loadedMap.get(defaultAgent.name);
+    if (!existing) {
       saveAgentToFile(defaultAgent, targetDir);
       loadedMap.set(defaultAgent.name, defaultAgent);
+    } else if (!existing.baseInstructions && defaultAgent.baseInstructions) {
+      // Restore base instructions if they were lost during migration
+      existing.baseInstructions = defaultAgent.baseInstructions;
+      saveAgentToFile(existing, targetDir);
     }
   }
 
@@ -195,23 +241,43 @@ export function saveAgentToFile(agent: AgentConfig, targetDir?: string) {
     fs.mkdirSync(agentsDir, { recursive: true });
   }
 
-  const frontmatter = [
+  const effectivePrompt = agent.overrideBasePrompt
+    ? agent.systemInstructions
+    : (agent.baseInstructions ? `${agent.baseInstructions}\n\n${agent.systemInstructions}` : agent.systemInstructions);
+
+  // Schema oficial do Gemini CLI: name, model, description, tools
+  const fmLines = [
     '---',
-    `kind: ${agent.kind || 'local'}`,
     `name: ${agent.name}`,
-    `display_name: "${agent.displayName}"`,
-    `description: "${agent.description.replace(/"/g, '\\"')}"`,
     `model: ${agent.model}`,
+    `description: "${agent.description.replace(/"/g, '\\"')}"`,
     `tools: ${JSON.stringify(agent.tools || ['*'])}`,
-    `temperature: ${agent.temperature ?? 0.2}`,
-    `max_turns: ${agent.maxTurns ?? 25}`,
     '---',
-    '',
-    agent.systemInstructions,
-  ].join('\n');
+  ];
+
+  fmLines.push('');
+  fmLines.push(effectivePrompt.trim());
 
   const filePath = path.join(agentsDir, `${agent.name}.md`);
-  fs.writeFileSync(filePath, frontmatter, 'utf8');
+  fs.writeFileSync(filePath, fmLines.join('\n'), 'utf8');
+
+  // Salvar metadados de UI separadamente para não quebrar o CLI
+  const metadata = loadMetadata(targetDir);
+  metadata[agent.name] = {
+    displayName: agent.displayName,
+    baseInstructions: agent.baseInstructions,
+    systemInstructions: agent.systemInstructions,
+    overrideBasePrompt: agent.overrideBasePrompt,
+    temperature: agent.temperature,
+    topP: agent.topP,
+    topK: agent.topK,
+    maxOutputTokens: agent.maxOutputTokens,
+    thinking: agent.thinking,
+    conceptualProfile: agent.conceptualProfile,
+    maxTurns: agent.maxTurns,
+    kind: agent.kind,
+  };
+  saveMetadata(metadata, targetDir);
 }
 
 export function deleteAgent(name: string, targetDir?: string): boolean {
@@ -223,7 +289,7 @@ export function deleteAgent(name: string, targetDir?: string): boolean {
   return false;
 }
 
-function parseAgentMarkdown(content: string, fallbackName: string): AgentConfig | null {
+function parseAgentMarkdown(content: string, fallbackName: string, metadata: any = {}): AgentConfig | null {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   if (!match) {
     return null;
@@ -258,16 +324,23 @@ function parseAgentMarkdown(content: string, fallbackName: string): AgentConfig 
   return {
     id: name,
     name,
-    displayName: fields['display_name'] || name,
-    role: `${fields['display_name'] || name}: ${fields['description'] || ''}`,
+    displayName: metadata.displayName || fields['display_name'] || name,
+    role: `${metadata.displayName || fields['display_name'] || name}: ${fields['description'] || ''}`,
     model: fields['model'] || 'gemini-3.5-flash-lite',
     description: fields['description'] || '',
-    systemInstructions: body,
-    enabled: fields['enabled'] !== 'false',
-    kind: (fields['kind'] as any) || 'local',
+    baseInstructions: metadata.baseInstructions || '',
+    systemInstructions: metadata.systemInstructions || body,
+    overrideBasePrompt: metadata.overrideBasePrompt === true,
+    enabled: metadata.enabled !== false,
+    kind: (metadata.kind as any) || 'local',
     tools,
-    temperature: fields['temperature'] ? parseFloat(fields['temperature']) : 0.2,
-    maxTurns: fields['max_turns'] ? parseInt(fields['max_turns'], 10) : 25,
+    temperature: metadata.temperature ?? (fields['temperature'] ? parseFloat(fields['temperature']) : 0.2),
+    topP: metadata.topP ?? (fields['top_p'] ? parseFloat(fields['top_p']) : 0.95),
+    topK: metadata.topK ?? (fields['top_k'] ? parseInt(fields['top_k'], 10) : 40),
+    maxOutputTokens: metadata.maxOutputTokens ?? (fields['max_output_tokens'] ? parseInt(fields['max_output_tokens'], 10) : undefined),
+    thinking: metadata.thinking === true || fields['thinking'] === 'true',
+    conceptualProfile: metadata.conceptualProfile || fields['conceptual_profile'] || '',
+    maxTurns: metadata.maxTurns ?? (fields['max_turns'] ? parseInt(fields['max_turns'], 10) : 25),
     statusGrade: 'CONFIGURED',
   };
 }

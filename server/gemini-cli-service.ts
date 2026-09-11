@@ -103,49 +103,89 @@ export async function validateGeminiApiKey(
   }
 
   const startTime = Date.now();
-  try {
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
+  const validationModels = [
+    targetModel,
+    'gemini-2.5-flash-native-audio-latest',
+    'antigravity-preview-05-2026'
+  ];
+
+  let lastError: any = null;
+  let validatedModel = '';
+
+  for (const model of validationModels) {
+    try {
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          },
         },
-      },
-    });
+      });
 
-    const pingModel = targetModel;
-    await ai.models.generateContent({
-      model: pingModel,
-      contents: 'ping',
-      config: {
-        maxOutputTokens: 2,
-        temperature: 0,
-      },
-    });
+      // Se for um agente gerenciado, precisa usar o Interactions API com parâmetro 'agent'
+      if (model.includes('antigravity') || model.includes('deep-research')) {
+        await ai.interactions.create({
+          agent: model,
+          input: 'ping',
+          environment: 'remote',
+        });
+      } else {
+        // Para modelos padrão, tentamos primeiro o Interactions API que é o mais moderno e exigido por alguns modelos novos
+        try {
+          await ai.interactions.create({
+            model: model,
+            input: 'ping',
+          });
+        } catch (intErr: any) {
+          // Se falhar informando que o modelo NÃO suporta Interactions, tentamos o generateContent tradicional
+          if (intErr.message?.includes('not supported') || intErr.message?.includes('generateContent')) {
+            await ai.models.generateContent({
+              model,
+              contents: 'ping',
+              config: {
+                maxOutputTokens: 2,
+                temperature: 0,
+              },
+            });
+          } else {
+            throw intErr;
+          }
+        }
+      }
 
+      validatedModel = model;
+      break; // Success!
+    } catch (err: any) {
+      lastError = err;
+      sysLog.warn('API', `Falha ao validar modelo ${model}: ${err.message || err}`);
+    }
+  }
+
+  if (validatedModel) {
     const latencyMs = Date.now() - startTime;
     const res = {
       configured: true,
       valid: true,
-      message: `Chave GEMINI_API_KEY ativa e validada com sucesso no Google Gemini API (${targetModel}).`,
-      modelTested: targetModel,
+      message: `Chave GEMINI_API_KEY ativa e validada com sucesso no Google Gemini API (${validatedModel}).`,
+      modelTested: validatedModel,
       latencyMs,
     };
     lastValidationCache = { timestamp: now, model: targetModel, result: res };
     sysLog.success('API', `Validação da GEMINI_API_KEY bem-sucedida (${latencyMs}ms)`, { model: res.modelTested });
     return res;
-  } catch (err: any) {
+  } else {
     const latencyMs = Date.now() - startTime;
-    const errMsg = err?.message || String(err);
+    const errMsg = lastError?.message || String(lastError);
     const res = {
       configured: true,
       valid: false,
-      message: `Chave presente no ambiente, mas a validação com a API (${targetModel}) retornou: ${errMsg}`,
+      message: `Chave presente no ambiente, mas a validação falhou em todos os modelos testados (${validationModels.join(', ')}). Último erro: ${errMsg}`,
       modelTested: targetModel,
       latencyMs,
     };
     lastValidationCache = { timestamp: now, model: targetModel, result: res };
-    sysLog.warn('API', `Validação da GEMINI_API_KEY retornou aviso/erro (${targetModel}): ${errMsg}`, { latencyMs });
+    sysLog.warn('API', `Validação da GEMINI_API_KEY falhou em todos os modelos: ${errMsg}`, { latencyMs });
     return res;
   }
 }

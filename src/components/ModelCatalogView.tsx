@@ -119,29 +119,43 @@ export const ModelCatalogView: React.FC<ModelCatalogViewProps> = ({
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
           {[
-            { role: 'Principal / Orchestrator', model: 'gemini-3.5-flash-lite', quota: 'RPM 1/1521 | RPD 1/500' },
-            { role: 'Investigator', model: 'gemini-3.7-flash', quota: 'RPM 0/50 | RPD 0/20' },
-            { role: 'Architect', model: 'gemini-3.6-flash', quota: 'RPM 0/50 | RPD 0/20' },
-            { role: 'Auditor', model: 'gemini-3.8-flash', quota: 'RPM 0/50 | RPD 0/20' },
-            { role: 'Tester', model: 'gemini-3-flash', quota: 'RPM 0/50 | RPD 0/20' },
-            { role: 'Worker', model: 'gemini-3.1-flash-lite', quota: 'RPM 0/150 | RPD 0/500' },
+            { role: 'Principal / Orchestrator', id: 'principal', quota: 'RPM 1/1521 | RPD 1/500' },
+            { role: 'Investigator', id: 'investigator', quota: 'RPM 0/50 | RPD 0/20' },
+            { role: 'Architect', id: 'architect', quota: 'RPM 0/50 | RPD 0/20' },
+            { role: 'Auditor', id: 'auditor', quota: 'RPM 0/50 | RPD 0/20' },
+            { role: 'Tester', id: 'tester', quota: 'RPM 0/50 | RPD 0/20' },
+            { role: 'Worker', id: 'worker', quota: 'RPM 0/150 | RPD 0/500' },
           ].map((item) => {
             const currentAgent = agents.find(
-              (a) => a.name.toLowerCase() === item.role.split(' ')[0].toLowerCase() || a.id.toLowerCase() === item.role.split(' ')[0].toLowerCase()
+              (a) => a.id.toLowerCase() === item.id.toLowerCase()
             );
-            const activeModel = currentAgent?.model || item.model;
             return (
               <div
                 key={item.role}
-                className="p-2.5 rounded-lg bg-white dark:bg-zinc-800/80 border border-blue-100 dark:border-zinc-700 text-xs shadow-2xs"
+                className="p-2.5 rounded-lg bg-white dark:bg-zinc-800/80 border border-blue-100 dark:border-zinc-700 text-xs shadow-2xs flex flex-col justify-between"
               >
-                <div className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center justify-between">
-                  <span>{item.role}</span>
+                <div>
+                  <div className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center justify-between">
+                    <span>{item.role}</span>
+                  </div>
+                  <div className="mt-1.5">
+                    <select
+                      className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md py-1 px-1.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 outline-none"
+                      value={currentAgent?.id || ''}
+                      onChange={(e) => {
+                        // In a real scenario, this might update a mapping
+                        // For now, we show the selection
+                      }}
+                    >
+                      {agents.map((ag) => (
+                        <option key={ag.id} value={ag.id}>
+                          {ag.displayName || ag.name} ({ag.model})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div className="font-mono text-[11px] font-bold text-blue-600 dark:text-blue-400 mt-1">
-                  {activeModel}
-                </div>
-                <div className="text-[10px] text-zinc-400 font-mono mt-0.5">{item.quota}</div>
+                <div className="text-[10px] text-zinc-400 font-mono mt-2">{item.quota}</div>
               </div>
             );
           })}

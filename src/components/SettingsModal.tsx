@@ -56,6 +56,7 @@ interface SettingsModalProps {
   cliStatus: CliStatus | null;
   agents: AgentConfig[];
   onSaveAgent: (agent: AgentConfig) => Promise<void>;
+  onDeleteAgent: (id: string) => Promise<void>;
   skills: SkillConfig[];
   onSaveSkill: (skill: SkillConfig) => Promise<void>;
   onDeleteSkill: (name: string) => Promise<void>;
@@ -89,6 +90,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   cliStatus,
   agents,
   onSaveAgent,
+  onDeleteAgent,
   skills,
   onSaveSkill,
   onDeleteSkill,
@@ -171,6 +173,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Agent editing
   const [editingAgent, setEditingAgent] = useState<AgentConfig | null>(null);
+  const [isNewAgent, setIsNewAgent] = useState(false);
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const [agentForModelSelect, setAgentForModelSelect] = useState<AgentConfig | null>(null);
 
@@ -730,28 +733,74 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       Cada agente possui arquivo Markdown com YAML frontmatter reconhecido pelo Gemini CLI.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (onResetDefaultAgentsConfig) {
-                        await onResetDefaultAgentsConfig();
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-xs font-semibold flex items-center gap-1.5 transition self-start cursor-pointer shrink-0"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Restaurar Configuração Padrão</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingAgent({
+                          id: '',
+                          name: '',
+                          displayName: '',
+                          role: '',
+                          model: 'gemini-3.5-flash-lite',
+                          description: '',
+                          baseInstructions: '',
+                          systemInstructions: '',
+                          overrideBasePrompt: false,
+                          enabled: true,
+                          kind: 'local',
+                          tools: ['*'],
+                          temperature: 0.2,
+                          topP: 0.95,
+                          topK: 40,
+                          maxOutputTokens: undefined,
+                          thinking: false,
+                          conceptualProfile: '',
+                          maxTurns: 25,
+                          statusGrade: 'CONFIGURED',
+                        });
+                        setIsNewAgent(true);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Novo Agente</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (onResetDefaultAgentsConfig) {
+                          await onResetDefaultAgentsConfig();
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Restaurar Padrões</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {agents.map((agent) => (
                     <div
                       key={agent.id}
-                      className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 flex flex-col justify-between"
+                      className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 flex flex-col justify-between group relative"
                     >
+                      {!['principal', 'investigator', 'architect', 'auditor', 'tester', 'worker'].includes(agent.id.toLowerCase()) && (
+                        <button
+                          onClick={async () => {
+                            if (confirm(`Deseja realmente remover o agente "${agent.displayName || agent.name}"?`)) {
+                              await onDeleteAgent(agent.id);
+                            }
+                          }}
+                          className="absolute top-2 right-2 p-1.5 text-zinc-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <div>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between pr-8">
                           <span className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">
                             {agent.displayName || agent.name}
                           </span>
@@ -774,9 +823,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
 
                       <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-700/60 flex items-center justify-between">
-                        <span className="text-[10px] text-zinc-400 font-mono">
-                          tools: {agent.tools.join(', ')} | max: {agent.maxTurns}
-                        </span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-zinc-400 font-mono">
+                            tools: {agent.tools.join(', ')} | max: {agent.maxTurns}
+                          </span>
+                          {agent.thinking && (
+                            <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-tighter">Thinking Enabled</span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
@@ -790,7 +844,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setEditingAgent({ ...agent })}
+                            onClick={() => {
+                              setEditingAgent({ ...agent });
+                              setIsNewAgent(false);
+                            }}
                             className="px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition cursor-pointer"
                           >
                             Editar Agente
@@ -803,109 +860,249 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 {/* Edit Agent Modal Subview */}
                 {editingAgent && (
-                  <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4">
-                    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-xl p-6 space-y-4 shadow-xl">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-semibold text-sm">Editar Agente: {editingAgent.displayName || editingAgent.name}</h4>
-                        <button onClick={() => setEditingAgent(null)} className="text-zinc-400 hover:text-zinc-600">
-                          <X className="w-4 h-4" />
+                  <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-4xl p-6 space-y-4 shadow-2xl overflow-y-auto max-h-[90vh]">
+                      <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-4">
+                        <div className="flex items-center gap-2">
+                          <Bot className="w-5 h-5 text-blue-500" />
+                          <h4 className="font-bold text-base">
+                            {isNewAgent ? 'Criar Novo Agente Personalizado' : `Editar Agente: ${editingAgent.displayName || editingAgent.name}`}
+                          </h4>
+                        </div>
+                        <button onClick={() => setEditingAgent(null)} className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition">
+                          <X className="w-5 h-5" />
                         </button>
                       </div>
 
-                      <div className="space-y-3 text-xs">
-                        <div>
-                          <label className="block text-zinc-500 mb-1">Nome de Exibição</label>
-                          <input
-                            type="text"
-                            value={editingAgent.displayName || ''}
-                            onChange={(e) => setEditingAgent({ ...editingAgent, displayName: e.target.value })}
-                            className="w-full px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700"
-                          />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                        {/* Left Column: Identificação */}
+                        <div className="space-y-4">
+                          <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/60">
+                            <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-3">1. Identificação</label>
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-[10px] text-zinc-400 mb-1">Nome Interno (ID)</label>
+                                  <input
+                                    type="text"
+                                    disabled={!isNewAgent}
+                                    value={editingAgent.name}
+                                    onChange={(e) => setEditingAgent({ ...editingAgent, name: e.target.value, id: e.target.value })}
+                                    placeholder="ex: meu_agente"
+                                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs disabled:opacity-50 font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] text-zinc-400 mb-1">Nome de Exibição</label>
+                                  <input
+                                    type="text"
+                                    value={editingAgent.displayName || ''}
+                                    onChange={(e) => setEditingAgent({ ...editingAgent, displayName: e.target.value })}
+                                    placeholder="ex: Especialista em React"
+                                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-zinc-400 mb-1">Perfil Conceitual</label>
+                                <input
+                                  type="text"
+                                  value={editingAgent.conceptualProfile || ''}
+                                  onChange={(e) => setEditingAgent({ ...editingAgent, conceptualProfile: e.target.value })}
+                                  placeholder="ex: Minimalista, Técnico, Poético..."
+                                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-zinc-400 mb-1">Breve Descrição (Metadados)</label>
+                                <textarea
+                                  rows={2}
+                                  value={editingAgent.description}
+                                  onChange={(e) => setEditingAgent({ ...editingAgent, description: e.target.value })}
+                                  placeholder="Descreva a especialidade deste agente para fins de roteamento..."
+                                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs resize-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-blue-600 dark:text-blue-400 font-bold mb-1 uppercase tracking-tighter">Instruções Básicas (Prompt Principal)</label>
+                                <textarea
+                                  rows={12}
+                                  value={editingAgent.baseInstructions || ''}
+                                  onChange={(e) => setEditingAgent({ ...editingAgent, baseInstructions: e.target.value })}
+                                  placeholder="Defina as instruções fundamentais e permanentes do agente..."
+                                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-[11px] font-mono focus:ring-2 focus:ring-blue-500/20 outline-none leading-relaxed"
+                                />
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="block text-zinc-500">Modelo Operacional</label>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAgentForModelSelect(editingAgent);
-                                setIsModelSelectorOpen(true);
-                              }}
-                              className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
-                            >
-                              <Cpu className="w-3.5 h-3.5" />
-                              Ver Tabela & Selecionar Catálogo
-                            </button>
-                          </div>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={editingAgent.model}
-                              onChange={(e) => setEditingAgent({ ...editingAgent, model: e.target.value })}
-                              className="flex-1 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono text-xs"
-                              placeholder="ex: gemini-3.7-flash"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAgentForModelSelect(editingAgent);
-                                setIsModelSelectorOpen(true);
-                              }}
-                              className="px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-xs font-semibold cursor-pointer transition shrink-0"
-                            >
-                              Catálogo...
-                            </button>
-                          </div>
-                          <div className="flex gap-1.5 mt-2 flex-wrap">
-                            {[
-                              { label: 'gemini-3.8-flash (Auditor)', model: 'gemini-3.8-flash' },
-                              { label: 'gemini-3.7-flash (Investigator)', model: 'gemini-3.7-flash' },
-                              { label: 'gemini-3.6-flash (Architect)', model: 'gemini-3.6-flash' },
-                              { label: 'gemini-3-flash (Tester)', model: 'gemini-3-flash' },
-                              { label: 'gemini-3.1-flash-lite (Worker)', model: 'gemini-3.1-flash-lite' },
-                              { label: 'gemini-3.5-flash-lite (Principal)', model: 'gemini-3.5-flash-lite' },
-                            ].map((preset) => (
+
+                        {/* Right Column: Model & Advanced & Override */}
+                        <div className="space-y-4">
+                          {/* 2. Configuração de Modelo */}
+                          <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/60">
+                            <div className="flex items-center justify-between mb-3">
+                              <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500">2. Configuração de Modelo</label>
                               <button
-                                key={preset.model}
                                 type="button"
-                                onClick={() => setEditingAgent({ ...editingAgent, model: preset.model })}
-                                className={`px-2 py-0.5 rounded text-[10px] font-mono border transition cursor-pointer ${
-                                  editingAgent.model === preset.model
-                                    ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-400 font-bold'
-                                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200'
-                                }`}
+                                onClick={() => {
+                                  setAgentForModelSelect(editingAgent);
+                                  setIsModelSelectorOpen(true);
+                                }}
+                                className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                               >
-                                {preset.label}
+                                <Cpu className="w-3 h-3" />
+                                Abrir Catálogo
                               </button>
-                            ))}
+                            </div>
+                            <div className="space-y-3">
+                              <input
+                                type="text"
+                                value={editingAgent.model}
+                                onChange={(e) => setEditingAgent({ ...editingAgent, model: e.target.value })}
+                                className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 font-mono text-xs text-blue-600 dark:text-blue-400 font-bold"
+                                placeholder="ex: gemini-3.7-flash"
+                              />
+                            </div>
                           </div>
-                        </div>
-                        <div>
-                          <label className="block text-zinc-500 mb-1">Instruções do Sistema (Markdown body)</label>
-                          <textarea
-                            rows={6}
-                            value={editingAgent.systemInstructions}
-                            onChange={(e) => setEditingAgent({ ...editingAgent, systemInstructions: e.target.value })}
-                            className="w-full px-3 py-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono text-xs"
-                          />
+
+                          {/* 3. Configurações Avançadas */}
+                          <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/60">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Sliders className="w-4 h-4 text-blue-500" />
+                              <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500">3. Configurações Avançadas</label>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                              <div className="space-y-1">
+                                <label className="block text-[10px] text-zinc-500">Temperature ({editingAgent.temperature})</label>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="2"
+                                  step="0.1"
+                                  value={editingAgent.temperature || 0}
+                                  onChange={(e) => setEditingAgent({ ...editingAgent, temperature: parseFloat(e.target.value) })}
+                                  className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="block text-[10px] text-zinc-500">Top P ({editingAgent.topP || 0.95})</label>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="1"
+                                  step="0.05"
+                                  value={editingAgent.topP || 0.95}
+                                  onChange={(e) => setEditingAgent({ ...editingAgent, topP: parseFloat(e.target.value) })}
+                                  className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="block text-[10px] text-zinc-500">Top K</label>
+                                <input
+                                  type="number"
+                                  value={editingAgent.topK ?? 40}
+                                  onChange={(e) => setEditingAgent({ ...editingAgent, topK: parseInt(e.target.value) })}
+                                  className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs font-mono"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="block text-[10px] text-zinc-500">Max Tokens</label>
+                                <input
+                                  type="number"
+                                  value={editingAgent.maxOutputTokens ?? ''}
+                                  placeholder="Padrão"
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? undefined : parseInt(e.target.value);
+                                    setEditingAgent({ ...editingAgent, maxOutputTokens: val });
+                                  }}
+                                  className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs font-mono"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="block text-[10px] text-zinc-500">Max Turns</label>
+                                <input
+                                  type="number"
+                                  value={editingAgent.maxTurns || 25}
+                                  onChange={(e) => setEditingAgent({ ...editingAgent, maxTurns: parseInt(e.target.value) })}
+                                  className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs font-mono"
+                                />
+                              </div>
+                              <div className="flex items-center justify-between col-span-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300">Modo Thinking</span>
+                                  <span className="text-[9px] text-zinc-500">Ativa raciocínio em cadeia</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingAgent({ ...editingAgent, thinking: !editingAgent.thinking })}
+                                  className={`w-9 h-4.5 rounded-full transition-colors relative flex items-center px-0.5 ${
+                                    editingAgent.thinking ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-600'
+                                  }`}
+                                >
+                                  <div className={`w-3.5 h-3.5 bg-white rounded-full transition-transform ${editingAgent.thinking ? 'translate-x-4.5' : 'translate-x-0'}`} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 4. SYSTEM PROMPT OVERRIDE */}
+                          <div className="p-4 rounded-2xl bg-amber-50/40 dark:bg-amber-950/10 border border-amber-200 dark:border-amber-900/30">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <ShieldAlert className="w-4 h-4 text-amber-600" />
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">4. System Prompt Override</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-bold text-zinc-500 uppercase">Sobrescrever base</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingAgent({ ...editingAgent, overrideBasePrompt: !editingAgent.overrideBasePrompt })}
+                                  className={`w-8 h-4 rounded-full transition-colors relative flex items-center px-0.5 ${
+                                    editingAgent.overrideBasePrompt ? 'bg-amber-500' : 'bg-zinc-300 dark:bg-zinc-600'
+                                  }`}
+                                >
+                                  <div className={`w-3 h-3 bg-white rounded-full transition-transform ${editingAgent.overrideBasePrompt ? 'translate-x-4' : 'translate-x-0'}`} />
+                                </button>
+                              </div>
+                            </div>
+                            <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80 mb-2 leading-relaxed">
+                              {editingAgent.overrideBasePrompt 
+                                ? '⚠️ MODO SUBSTITUIÇÃO: Este prompt IGNORARÁ as Instruções Básicas.' 
+                                : '✨ MODO COMPLEMENTAR: Este prompt será anexado às Instruções Básicas.'}
+                            </p>
+                            <textarea
+                              rows={6}
+                              value={editingAgent.systemInstructions}
+                              onChange={(e) => setEditingAgent({ ...editingAgent, systemInstructions: e.target.value })}
+                              placeholder="Adicione instruções contextuais ou específicas para esta camada..."
+                              className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200 dark:border-amber-800/50 font-mono text-[11px] text-zinc-800 dark:text-zinc-200 focus:ring-2 focus:ring-amber-500/20 outline-none leading-relaxed"
+                            />
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex justify-end gap-2 pt-2">
+                      <div className="flex justify-end gap-3 pt-6 border-t border-zinc-100 dark:border-zinc-800">
                         <button
                           onClick={() => setEditingAgent(null)}
-                          className="px-3 py-1.5 text-xs text-zinc-500"
+                          className="px-4 py-2 text-xs font-semibold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition"
                         >
                           Cancelar
                         </button>
                         <button
                           onClick={async () => {
+                            if (isNewAgent && !editingAgent.name) {
+                              alert('O nome interno do agente é obrigatório.');
+                              return;
+                            }
                             await onSaveAgent(editingAgent);
                             setEditingAgent(null);
                           }}
-                          className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white"
+                          className="px-6 py-2 text-xs font-bold rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20 transition-all flex items-center gap-2"
                         >
-                          Salvar Agente
+                          <Save className="w-4 h-4" />
+                          <span>{isNewAgent ? 'Criar Agente' : 'Salvar Alterações'}</span>
                         </button>
                       </div>
                     </div>
@@ -1331,42 +1528,112 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* 7. HOOKS */}
             {activeTab === 'hooks' && (
-              <div className="space-y-6 max-w-2xl">
-                <div>
-                  <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    Hooks no Gemini CLI {cliStatus?.version ? `v${cliStatus.version}` : ''}
-                  </h4>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Status e suporte para migração e acionadores de eventos.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                      gemini hooks migrate
-                    </span>
-                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
-                      Suportado no CLI {cliStatus?.version ? `v${cliStatus.version}` : ''}
+              <div className="space-y-6 max-w-2xl animate-in slide-in-from-right duration-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-amber-500" />
+                      Hooks e Acionadores de Eventos do Gemini CLI
+                    </h4>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Gerencie como o CLI reage a eventos internos e integrações externas.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 font-mono uppercase">
+                      Sistema Ativo
                     </span>
                   </div>
-                  <p className="text-zinc-500">
-                    Migra automaticamente hooks existentes de outros ambientes (como Claude Code) para as convenções do Gemini CLI.
-                  </p>
                 </div>
 
-                <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                      Event Hooks (pre-tool / post-tool)
-                    </span>
-                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
-                      CONFIGURADO / NÃO VALIDADO
-                    </span>
+                <div className="grid grid-cols-1 gap-4">
+                  {/* Migration Hook */}
+                  <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                          <RefreshCw className="w-3.5 h-3.5 text-blue-500" />
+                        </div>
+                        <span className="font-semibold text-xs text-zinc-800 dark:text-zinc-200">
+                          gemini hooks migrate
+                        </span>
+                      </div>
+                      <span className="text-[9px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        Totalmente Suportado
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed">
+                      Este hook migra automaticamente configurações de ambiente legado (Claude Code, Aider, etc) para a estrutura <code className="bg-zinc-200 dark:bg-zinc-700 px-1 rounded">.gemini/</code>.
+                    </p>
+                    <button className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1">
+                      Executar migração assistida <ExternalLink className="w-2.5 h-2.5" />
+                    </button>
                   </div>
-                  <p className="text-zinc-500">
-                    Em conformidade com a distinção de estados: a estrutura de configuração em settings.json está pronta, mas o disparo em stream-json headless sem extensão de terminal interativo está classificado como NOT VALIDATED.
-                  </p>
+
+                  {/* Tool Lifecycle Hooks */}
+                  <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold text-xs text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <Code2 className="w-3.5 h-3.5 text-purple-500" />
+                          Tool Lifecycle Hooks
+                        </span>
+                        <span className="text-[9px] uppercase font-bold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                          Configuração Parcial
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-500">
+                        Scripts personalizados executados antes ou depois da invocação de ferramentas.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700">
+                        <span className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400">pre-tool-call</span>
+                        <span className="text-[10px] text-zinc-400 italic">Nenhum script definido</span>
+                      </div>
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700">
+                        <span className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400">post-tool-call</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-emerald-500 font-bold uppercase">audit-check.sh</span>
+                          <Check className="w-3 h-3 text-emerald-500" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Custom System Notifications Hook */}
+                  <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                          <Activity className="w-3.5 h-3.5 text-rose-500" />
+                        </div>
+                        <span className="font-semibold text-xs text-zinc-800 dark:text-zinc-200">
+                          Runtime Event Stream
+                        </span>
+                      </div>
+                      <span className="text-[9px] uppercase font-bold px-2 py-0.5 rounded bg-zinc-200 dark:bg-zinc-700 text-zinc-500 border border-zinc-300 dark:border-zinc-600">
+                        Desativado
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed">
+                      Streaming de eventos de execução para webhooks externos ou logs de sistema. Atualmente limitado por restrições de sandbox de iFrame.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-900/30 bg-amber-50/30 dark:bg-amber-950/10">
+                  <div className="flex gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                    <div>
+                      <h5 className="text-xs font-bold text-amber-800 dark:text-amber-400">Nota sobre Validação Headless</h5>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-500 mt-1 leading-relaxed">
+                        Em conformidade com a distinção de estados: a estrutura de configuração em <code className="font-mono">settings.json</code> está pronta, mas o disparo em stream-json headless sem extensão de terminal interativo está classificado como <strong>NOT VALIDATED</strong>.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

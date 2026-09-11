@@ -837,6 +837,14 @@ export function App() {
     }
   };
 
+  const handleDeleteAgent = async (id: string) => {
+    const res = await fetch(`/api/agents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (res.ok) {
+      const data = await res.json();
+      setAgents(data.agents);
+    }
+  };
+
   const handleResetDefaultAgents = async () => {
     try {
       const res = await fetch('/api/agents/reset-defaults', { method: 'POST' });
@@ -1075,6 +1083,7 @@ export function App() {
         cliStatus={cliStatus}
         agents={agents}
         onSaveAgent={handleSaveAgent}
+        onDeleteAgent={handleDeleteAgent}
         skills={skills}
         onSaveSkill={handleSaveSkill}
         onDeleteSkill={handleDeleteSkill}

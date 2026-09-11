@@ -33,11 +33,18 @@ export interface AgentConfig {
   role: string;
   model: string;
   description: string;
+  baseInstructions?: string;
   systemInstructions: string;
+  overrideBasePrompt?: boolean;
   enabled: boolean;
   kind: 'local' | 'remote';
   tools: string[];
   temperature?: number;
+  topP?: number;
+  topK?: number;
+  maxOutputTokens?: number;
+  thinking?: boolean;
+  conceptualProfile?: string;
   maxTurns?: number;
   statusGrade: StatusGrade;
 }
