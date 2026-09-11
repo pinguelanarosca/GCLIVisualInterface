@@ -582,6 +582,7 @@ export function executeGeminiCli(
     cwd,
     env,
     stdio: ['pipe', 'pipe', 'pipe'],
+    timeout: 300000, // 5 minutes timeout to accommodate long-running operations
   });
 
   activeChildProcess = child;
@@ -633,20 +634,22 @@ export function executeGeminiCli(
     fs.mkdirSync(logsDir, { recursive: true });
   }
   const debugLogPath = path.join(logsDir, 'cli-debug.log');
-  // Use async write to clear file
-  fs.writeFile(debugLogPath, '', (err) => {
-    if (err) console.error('Failed to clear debug log', err);
-  });
+  
+  // Create write stream for buffered logging
+  const logStream = fs.createWriteStream(debugLogPath, { flags: 'w' });
 
   child.stderr?.on('data', (chunk) => {
     const raw = chunk.toString();
     stderrText += raw;
-    fs.appendFile(debugLogPath, raw, (err) => {
-        if (err) console.error('Failed to append to debug log', err);
-    });
+    logStream.write(raw);
   });
 
   child.on('close', (code) => {
+    logStream.end();
+    if (code !== 0 && stderrText.includes("No previous sessions found")) {
+      sysLog.warn('CLI', `Sessão ${params.sessionId} não encontrada, limpando cache.`);
+      if (params.sessionId) knownSessions.delete(params.sessionId);
+    }
     params.onEvent({ 
       type: 'stderr_debug_complete', 
       data: { 
