@@ -633,12 +633,17 @@ export function executeGeminiCli(
     fs.mkdirSync(logsDir, { recursive: true });
   }
   const debugLogPath = path.join(logsDir, 'cli-debug.log');
-  fs.writeFileSync(debugLogPath, ''); // Clear log file
+  // Use async write to clear file
+  fs.writeFile(debugLogPath, '', (err) => {
+    if (err) console.error('Failed to clear debug log', err);
+  });
 
   child.stderr?.on('data', (chunk) => {
     const raw = chunk.toString();
     stderrText += raw;
-    fs.appendFileSync(debugLogPath, raw);
+    fs.appendFile(debugLogPath, raw, (err) => {
+        if (err) console.error('Failed to append to debug log', err);
+    });
   });
 
   child.on('close', (code) => {
