@@ -4,8 +4,29 @@ import os from 'node:os';
 import { execSync } from 'node:child_process';
 import { ProjectItem, AuthorizedDir, SessionItem, FileDiffItem, FilesAndDiffsResult, FileEntryItem } from '../src/types.js';
 import { sysLog } from './logger-service.js';
+import { getGuiDataDir } from './paths-service.js';
 
-const STORAGE_FILE = path.join(process.cwd(), '.gemini-gui-storage.json');
+function getStorageFilePath(): string {
+  const dataDir = getGuiDataDir();
+  const primaryFile = path.join(dataDir, 'storage.json');
+  if (fs.existsSync(primaryFile)) {
+    return primaryFile;
+  }
+  const legacyDataFile = path.join(dataDir, '.gemini-gui-storage.json');
+  if (fs.existsSync(legacyDataFile)) {
+    return legacyDataFile;
+  }
+  const legacyCwdFile = path.join(process.cwd(), '.gemini-gui-storage.json');
+  if (fs.existsSync(legacyCwdFile)) {
+    try {
+      fs.copyFileSync(legacyCwdFile, primaryFile);
+      return primaryFile;
+    } catch {
+      // Ignore if legacy CWD file is not accessible
+    }
+  }
+  return primaryFile;
+}
 
 interface AppDataStore {
   projects: ProjectItem[];
@@ -16,22 +37,23 @@ interface AppDataStore {
 
 export function resolveLocalPath(inputPath?: string): string {
   if (!inputPath || !inputPath.trim()) {
-    return process.cwd();
+    return getGuiDataDir();
   }
   let p = inputPath.trim();
   if (p.startsWith('~')) {
     p = path.join(os.homedir(), p.slice(1));
   }
   if (!path.isAbsolute(p)) {
-    p = path.resolve(process.cwd(), p);
+    p = path.resolve(os.homedir(), p);
   }
   return path.normalize(p);
 }
 
 function loadStore(): AppDataStore {
-  if (fs.existsSync(STORAGE_FILE)) {
+  const storageFile = getStorageFilePath();
+  if (fs.existsSync(storageFile)) {
     try {
-      const raw = fs.readFileSync(STORAGE_FILE, 'utf8');
+      const raw = fs.readFileSync(storageFile, 'utf8');
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.projects)) {
         // Sanitize projects to guarantee valid directories
@@ -41,7 +63,7 @@ function loadStore(): AppDataStore {
             .filter((d: string) => fs.existsSync(d));
 
           if (validDirs.length === 0) {
-            validDirs.push(process.cwd());
+            validDirs.push(os.homedir());
           }
           return {
             ...proj,
@@ -55,7 +77,7 @@ function loadStore(): AppDataStore {
           .filter((d: string) => fs.existsSync(d));
 
         if (validAuthDirs.length === 0) {
-          validAuthDirs.push(process.cwd());
+          validAuthDirs.push(os.homedir());
         }
         parsed.authorizedDirs = validAuthDirs;
 
@@ -66,7 +88,7 @@ function loadStore(): AppDataStore {
     }
   }
 
-  const initialWorkspace = process.cwd();
+  const initialWorkspace = os.homedir();
   const initialProject: ProjectItem = {
     id: 'proj_default',
     name: 'Projeto Principal',
@@ -89,7 +111,8 @@ function loadStore(): AppDataStore {
 
 function saveStore(store: AppDataStore) {
   try {
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify(store, null, 2), 'utf8');
+    const storageFile = getStorageFilePath();
+    fs.writeFileSync(storageFile, JSON.stringify(store, null, 2), 'utf8');
   } catch (err) {
     console.error('Failed to save store:', err);
   }
@@ -176,7 +199,7 @@ export function createProject(name: string, description: string, associatedDirs?
   const store = loadStore();
   const id = `proj_${Date.now()}`;
   
-  const rawDirs = associatedDirs && associatedDirs.length > 0 ? associatedDirs : [process.cwd()];
+  const rawDirs = associatedDirs && associatedDirs.length > 0 ? associatedDirs : [os.homedir()];
   const resolvedDirs: string[] = [];
 
   for (const raw of rawDirs) {
@@ -194,7 +217,7 @@ export function createProject(name: string, description: string, associatedDirs?
     id,
     name: name.trim() || 'Novo Projeto',
     description: description.trim() || '',
-    associatedDirs: resolvedDirs.length > 0 ? resolvedDirs : [process.cwd()],
+    associatedDirs: resolvedDirs.length > 0 ? resolvedDirs : [os.homedir()],
     guidelines: guidelines || '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -326,7 +349,7 @@ export function inspectFilesAndDiffs(dirPath?: string): FilesAndDiffsResult {
   const store = loadStore();
   
   // Resolve target directory requested by user or fall back to default
-  const defaultDir = store.projects[0]?.associatedDirs[0] || store.authorizedDirs[0] || process.cwd();
+  const defaultDir = store.projects[0]?.associatedDirs[0] || store.authorizedDirs[0] || os.homedir();
   const targetDir = dirPath && dirPath.trim() ? resolveLocalPath(dirPath) : resolveLocalPath(defaultDir);
 
   const parentDir = path.dirname(targetDir) !== targetDir ? path.dirname(targetDir) : null;

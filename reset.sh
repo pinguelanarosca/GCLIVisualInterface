@@ -18,8 +18,13 @@ fi
 
 echo "Removendo dados e estados persistidos da aplicação..."
 
-# 1. Remover banco de dados de persistência local da GUI
+# 1. Remover banco de dados de persistência local e dados da GUI
 rm -f .gemini-gui-storage.json
+for UHOME in "${USER_HOMES[@]}"; do
+    if [ -n "$UHOME" ]; then
+        rm -rf "$UHOME/.local/share/gemini-gui"
+    fi
+done
 
 # 2. Remover diretório local da workspace .gemini/
 rm -rf .gemini/

@@ -6,6 +6,7 @@ import os from 'node:os';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createServer as createViteServer } from 'vite';
+import { getGuiDataDir } from './server/paths-service.js';
 
 // Safe directory resolution compatible with both CommonJS (compiled dist/server.cjs) and ESM (tsx)
 const getAppDir = (): string => {
@@ -117,7 +118,7 @@ async function startServer() {
 
   // Seed custom web preview policy to prevent tool blocks in headless/preview mode
   try {
-    const geminiDir = path.join(process.cwd(), '.gemini');
+    const geminiDir = path.join(getGuiDataDir(), '.gemini');
     if (!fs.existsSync(geminiDir)) {
       fs.mkdirSync(geminiDir, { recursive: true });
     }

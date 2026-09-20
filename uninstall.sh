@@ -47,6 +47,7 @@ fi
 
 # Remover em todos os diretórios HOME relevantes
 for UHOME in "${USER_HOMES[@]}"; do
+    remove_target "$UHOME/.local/share/gemini-gui"
     if [ -d "$UHOME/.gemini" ]; then
         remove_target "$UHOME/.gemini/history"
         remove_target "$UHOME/.gemini/tmp"

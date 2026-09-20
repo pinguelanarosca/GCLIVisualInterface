@@ -7,6 +7,7 @@ import { CliStatus } from '../src/types.js';
 import { sysLog } from './logger-service.js';
 import { syncAgentsToSettings, loadAgents } from './agents-service.js';
 import { syncPoliciesToSettings } from './policies-service.js';
+import { getGuiDataDir } from './paths-service.js';
 
 let activeChildProcess: ChildProcess | null = null;
 let currentRetryTimeout: NodeJS.Timeout | null = null;
@@ -510,9 +511,9 @@ export function executeGeminiCli(
 
   let cliPath = getResolvedCliPath();
 
-  let cwd = params.workDir || (params.authorizedDirs && params.authorizedDirs[0]) || process.cwd();
+  let cwd = params.workDir || (params.authorizedDirs && params.authorizedDirs[0]) || getGuiDataDir();
   if (!cwd || !fs.existsSync(cwd)) {
-    cwd = process.cwd();
+    cwd = getGuiDataDir();
   }
 
   const shouldResume = params.sessionId ? (isExistingSession(params.sessionId) || isRetry) : false;
@@ -572,11 +573,12 @@ export function executeGeminiCli(
 
   // Carregar todas as políticas do sistema, usuário e workspace
   const userPoliciesDir = path.join(os.homedir(), '.gemini', 'policies');
+  const guiPoliciesDir = path.join(getGuiDataDir(), '.gemini', 'policies');
   const policyDirs = Array.from(new Set([
     '/etc/gemini-cli/policies',
     userPoliciesDir,
+    guiPoliciesDir,
     path.join(cwd, '.gemini', 'policies'),
-    path.join(process.cwd(), '.gemini', 'policies'),
   ]));
 
   // Adicionar diretórios de políticas
@@ -588,7 +590,7 @@ export function executeGeminiCli(
   }
 
   // Política base de ambiente web-preview (prioridade 5 para permitir tools básicas sem bloquear regras do usuário)
-  const customPolicyPath = path.join(process.cwd(), '.gemini', 'web-preview-policy.toml');
+  const customPolicyPath = path.join(getGuiDataDir(), '.gemini', 'web-preview-policy.toml');
   if (fs.existsSync(customPolicyPath)) {
     args.push('--policy', customPolicyPath);
   }
@@ -841,7 +843,7 @@ export function executeGeminiCli(
   });
 
   // Ensure logs directory exists
-  const logsDir = path.join(process.cwd(), '.gemini', 'logs');
+  const logsDir = path.join(getGuiDataDir(), '.gemini', 'logs');
   if (!fs.existsSync(logsDir)) {
     fs.mkdirSync(logsDir, { recursive: true });
   }

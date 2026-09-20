@@ -4,6 +4,7 @@ import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { McpConfig } from '../src/types.js';
 import { getResolvedCliPath } from './gemini-cli-service.js';
+import { getGuiDataDir } from './paths-service.js';
 
 const INITIAL_GITHUB_MCP: McpConfig = {
   name: 'github',
@@ -34,7 +35,7 @@ const INITIAL_EXA_MCP: McpConfig = {
 };
 
 export function getSettingsFilePath(targetDir?: string): string {
-  const base = targetDir || process.cwd();
+  const base = targetDir || getGuiDataDir();
   return path.join(base, '.gemini', 'settings.json');
 }
 

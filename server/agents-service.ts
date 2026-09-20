@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { AgentConfig } from '../src/types.js';
 import { sysLog } from './logger-service.js';
+import { getGuiDataDir } from './paths-service.js';
 
 const DEFAULT_AGENTS: AgentConfig[] = [
   {
@@ -146,7 +147,7 @@ Sua função primária:
 ];
 
 export function getAgentsDirectory(customDir?: string): string {
-  const base = customDir || process.cwd();
+  const base = customDir || getGuiDataDir();
   return path.join(base, '.gemini', 'agents');
 }
 
@@ -537,7 +538,7 @@ export function syncAgentsToSettings(
   activeConfig?: Partial<AgentConfig>
 ) {
   try {
-    const base = targetDir || process.cwd();
+    const base = targetDir || getGuiDataDir();
     const settingsPath = path.join(base, '.gemini', 'settings.json');
     let settings: any = {};
     if (fs.existsSync(settingsPath)) {
@@ -689,10 +690,18 @@ export function syncAgentsToSettings(
 
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
 
-    // Sincronizar também no process.cwd() se for diferente
-    if (path.resolve(base) !== path.resolve(process.cwd())) {
-      const rootSettings = path.join(process.cwd(), '.gemini', 'settings.json');
-      fs.writeFileSync(rootSettings, JSON.stringify(settings, null, 2), 'utf8');
+    // Sincronizar também no diretório de dados da GUI se base for um workspace específico
+    if (path.resolve(base) !== path.resolve(getGuiDataDir())) {
+      try {
+        const guiGeminiDir = path.join(getGuiDataDir(), '.gemini');
+        if (!fs.existsSync(guiGeminiDir)) {
+          fs.mkdirSync(guiGeminiDir, { recursive: true });
+        }
+        const guiSettings = path.join(guiGeminiDir, 'settings.json');
+        fs.writeFileSync(guiSettings, JSON.stringify(settings, null, 2), 'utf8');
+      } catch {
+        // Ignorar se houver restrição
+      }
     }
 
     // Sincronizar também no home do usuário ~/.gemini/settings.json para garantia total de resolução do CLI

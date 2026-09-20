@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { CommandConfig } from '../src/types.js';
+import { getGuiDataDir } from './paths-service.js';
 
 const DEFAULT_COMMANDS: CommandConfig[] = [
   {
@@ -67,7 +68,7 @@ const DEFAULT_COMMANDS: CommandConfig[] = [
 ];
 
 export function getCommandsDirectory(customDir?: string): string {
-  const base = customDir || process.cwd();
+  const base = customDir || getGuiDataDir();
   return path.join(base, '.gemini', 'commands');
 }
 

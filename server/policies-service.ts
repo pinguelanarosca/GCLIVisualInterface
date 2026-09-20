@@ -2,13 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { PolicyConfig } from '../src/types.js';
+import { getGuiDataDir } from './paths-service.js';
 
 export function getUserPoliciesDirectory(): string {
   return path.join(os.homedir(), '.gemini', 'policies');
 }
 
 export function getPoliciesDirectory(targetDir?: string): string {
-  const base = targetDir || process.cwd();
+  const base = targetDir || getGuiDataDir();
   return path.join(base, '.gemini', 'policies');
 }
 
@@ -86,7 +87,7 @@ export function syncPoliciesToSettings(targetDir?: string): void {
   try {
     ensureDefaultUserPolicies();
 
-    const base = targetDir || process.cwd();
+    const base = targetDir || getGuiDataDir();
     const userDir = getUserPoliciesDirectory();
     const wsDir = path.join(base, '.gemini', 'policies');
 

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { SkillConfig } from '../src/types.js';
+import { getGuiDataDir } from './paths-service.js';
 
 const DEFAULT_SKILLS: SkillConfig[] = [
   {
@@ -34,7 +35,7 @@ const DEFAULT_SKILLS: SkillConfig[] = [
 ];
 
 export function getSkillsDirectory(customDir?: string): string {
-  const base = customDir || process.cwd();
+  const base = customDir || getGuiDataDir();
   return path.join(base, '.gemini', 'skills');
 }
 
