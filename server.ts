@@ -5,11 +5,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Safe directory resolution compatible with both CommonJS (compiled dist/server.cjs) and ESM (tsx)
+const getAppDir = (): string => {
+  try {
+    if (typeof __dirname !== 'undefined' && __dirname) {
+      return __dirname;
+    }
+  } catch {}
+  return process.cwd();
+};
 
 // Attempt to load .env from fallback locations if process.env.GEMINI_API_KEY is not set
 const fallbackEnvPaths = [
@@ -658,12 +664,13 @@ priority = 90
     app.use(vite.middlewares);
   } else {
     // Dynamically search for dist/index.html across common execution directories
+    const appDir = getAppDir();
     const candidateDirs = [
       path.join(process.cwd(), 'dist'),
       process.cwd(),
-      __dirname,
-      path.resolve(__dirname, '..', 'dist'),
-      path.resolve(__dirname, '..'),
+      appDir,
+      path.resolve(appDir, '..', 'dist'),
+      path.resolve(appDir, '..'),
     ];
     const distPath = candidateDirs.find((dir) => fs.existsSync(path.join(dir, 'index.html'))) || path.join(process.cwd(), 'dist');
 
