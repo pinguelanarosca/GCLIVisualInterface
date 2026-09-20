@@ -826,6 +826,17 @@ export function executeGeminiCli(
       if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
         try {
           const parsed = JSON.parse(trimmed);
+          if (parsed.type === 'final_api_request') {
+            const finalReq = parsed.finalApiRequest || parsed.data?.finalApiRequest || parsed;
+            params.onEvent({
+              type: 'final_api_request',
+              data: {
+                finalApiRequest: finalReq,
+                parameterOrigins: parsed.parameterOrigins || parsed.data?.parameterOrigins,
+              },
+            });
+            continue;
+          }
           if (parsed.type === 'result' && parsed.status === 'error') {
             reportedErrorText = parsed.error?.message || 'Erro de execução reportado pelo Gemini CLI.';
             params.onEvent({

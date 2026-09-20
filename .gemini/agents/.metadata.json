@@ -58,5 +58,18 @@
     "maxTurns": 30,
     "kind": "local",
     "backupAgentId": "principal"
+  },
+  "aaa": {
+    "displayName": "aaa",
+    "baseInstructions": "",
+    "systemInstructions": "",
+    "overrideBasePrompt": false,
+    "temperature": 2,
+    "topP": 1,
+    "topK": 40,
+    "thinking": true,
+    "conceptualProfile": "",
+    "maxTurns": 25,
+    "kind": "local"
   }
 }

@@ -187,6 +187,9 @@ export function ensureAgentsSeeded(targetDir?: string): AgentConfig[] {
     // Ignore permissions in restricted containers
   }
 
+  // Run migration on any existing agent markdown files to ensure strict schema compliance
+  migrateExistingAgents(targetDir);
+
   const metadata = loadMetadata(targetDir);
 
   // Ensure each default agent exists on disk
@@ -200,9 +203,137 @@ export function ensureAgentsSeeded(targetDir?: string): AgentConfig[] {
     }
   }
   
-  syncAgentsToSettings();
+  syncAgentsToSettings(targetDir);
 
   return loadAgents(targetDir);
+}
+
+/**
+ * Realiza a migração automática de todos os arquivos de agentes .gemini/agents/*.md:
+ * - Remove campos proprietários do frontmatter (como backup_agent, top_p, top_k, thinking, etc.)
+ *   que violam o schema estrito do Gemini CLI.
+ * - Preserva temperature e max_turns (suportados oficialmente pelo schema nativo).
+ * - Preserva todos os metadados estendidos em .metadata.json e sincroniza com modelConfigs do settings.json.
+ */
+export function migrateExistingAgents(targetDir?: string): { migratedCount: number; agents: string[] } {
+  const agentsDir = getAgentsDirectory(targetDir);
+  if (!fs.existsSync(agentsDir)) {
+    return { migratedCount: 0, agents: [] };
+  }
+
+  const metadata = loadMetadata(targetDir);
+  const files = fs.readdirSync(agentsDir).filter((f) => f.endsWith('.md'));
+  let migratedCount = 0;
+  const migratedAgents: string[] = [];
+
+  for (const file of files) {
+    const filePath = path.join(agentsDir, file);
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const agentName = file.replace(/\.md$/, '');
+      const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+      
+      if (!match) continue;
+
+      const fm = match[1];
+      const body = match[2].trim();
+      const rawFields: Record<string, string> = {};
+
+      for (const line of fm.split('\n')) {
+        const sep = line.indexOf(':');
+        if (sep > 0) {
+          const key = line.slice(0, sep).trim();
+          let val = line.slice(sep + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          rawFields[key] = val;
+        }
+      }
+
+      // Schema nativo do Gemini CLI só aceita estritamente: name, model, description, kind, tools, temperature, max_turns
+      const officialKeys = new Set(['name', 'model', 'description', 'kind', 'tools', 'temperature', 'max_turns']);
+      const hasUnrecognizedKeys = Object.keys(rawFields).some(k => !officialKeys.has(k));
+
+      // Extrair e preservar metadados da GUI
+      const agentMeta = metadata[agentName] || {};
+      
+      if (rawFields['backup_agent'] || rawFields['backup_agent_id']) {
+        agentMeta.backupAgentId = rawFields['backup_agent'] || rawFields['backup_agent_id'];
+      }
+      if (rawFields['top_p'] !== undefined && agentMeta.topP === undefined) {
+        agentMeta.topP = parseFloat(rawFields['top_p']);
+      }
+      if (rawFields['top_k'] !== undefined && agentMeta.topK === undefined) {
+        agentMeta.topK = parseInt(rawFields['top_k'], 10);
+      }
+      if (rawFields['max_output_tokens'] !== undefined && agentMeta.maxOutputTokens === undefined) {
+        agentMeta.maxOutputTokens = parseInt(rawFields['max_output_tokens'], 10);
+      }
+      if (rawFields['thinking'] !== undefined && agentMeta.thinking === undefined) {
+        agentMeta.thinking = rawFields['thinking'] === 'true';
+      }
+      if (rawFields['conceptual_profile'] && !agentMeta.conceptualProfile) {
+        agentMeta.conceptualProfile = rawFields['conceptual_profile'];
+      }
+      if (rawFields['display_name'] && !agentMeta.displayName) {
+        agentMeta.displayName = rawFields['display_name'];
+      }
+      if (rawFields['role'] && !agentMeta.role) {
+        agentMeta.role = rawFields['role'];
+      }
+
+      metadata[agentName] = agentMeta;
+
+      // Se houver qualquer campo não reconhecido ou formatação antiga, reescrever no schema oficial
+      if (hasUnrecognizedKeys) {
+        const name = rawFields['name'] || agentName;
+        const model = rawFields['model'] || agentMeta.model || 'gemini-3.5-flash-lite';
+        const description = rawFields['description'] !== undefined ? rawFields['description'] : (agentMeta.description || '');
+        const kind = rawFields['kind'] || agentMeta.kind || 'local';
+        let toolsStr = '["*"]';
+        if (rawFields['tools']) {
+          toolsStr = rawFields['tools'];
+        } else if (agentMeta.tools) {
+          toolsStr = JSON.stringify(agentMeta.tools);
+        }
+
+        const cleanFmLines = [
+          '---',
+          `name: ${name}`,
+          `model: ${model}`,
+          `description: "${description.replace(/"/g, '\\"')}"`,
+          `kind: ${kind}`,
+          `tools: ${toolsStr}`,
+        ];
+
+        if (rawFields['temperature'] !== undefined) {
+          cleanFmLines.push(`temperature: ${rawFields['temperature']}`);
+        } else if (agentMeta.temperature !== undefined) {
+          cleanFmLines.push(`temperature: ${agentMeta.temperature}`);
+        }
+
+        if (rawFields['max_turns'] !== undefined) {
+          cleanFmLines.push(`max_turns: ${rawFields['max_turns']}`);
+        } else if (agentMeta.maxTurns !== undefined) {
+          cleanFmLines.push(`max_turns: ${agentMeta.maxTurns}`);
+        }
+
+        cleanFmLines.push('---');
+        cleanFmLines.push('');
+        cleanFmLines.push(body);
+
+        fs.writeFileSync(filePath, cleanFmLines.join('\n'), 'utf8');
+        migratedCount++;
+        migratedAgents.push(agentName);
+      }
+    } catch (err) {
+      console.error(`Erro ao migrar agente ${file}:`, err);
+    }
+  }
+
+  saveMetadata(metadata, targetDir);
+  return { migratedCount, agents: migratedAgents };
 }
 
 export function loadAgents(targetDir?: string): AgentConfig[] {
@@ -210,6 +341,9 @@ export function loadAgents(targetDir?: string): AgentConfig[] {
   if (!fs.existsSync(agentsDir)) {
     fs.mkdirSync(agentsDir, { recursive: true });
   }
+
+  // Auto-migração transparente de schemas legados
+  migrateExistingAgents(targetDir);
 
   const metadata = loadMetadata(targetDir);
   const files = fs.readdirSync(agentsDir).filter((f) => f.endsWith('.md'));
