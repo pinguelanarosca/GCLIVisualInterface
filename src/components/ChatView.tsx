@@ -243,7 +243,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50/50 dark:bg-zinc-950/40 relative">
       {/* Top Controls Bar with Centered Token Monitor */}
-      <div className="px-4 py-2.5 bg-white/90 dark:bg-zinc-900/90 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-xs shrink-0 shadow-xs z-10">
+      <div className="px-3 py-1.5 bg-white/90 dark:bg-zinc-900/90 border-b border-zinc-200/80 dark:border-zinc-800 flex items-center justify-center text-xs shrink-0 shadow-2xs z-10">
         <TokenMonitorBar
           messages={messages}
           isStreaming={isStreaming}
@@ -259,17 +259,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
       {/* Missing or Invalid API Key Alert Banner */}
       {cliStatus && (!cliStatus.authConfigured || cliStatus.apiValid === false) && (
-        <div className="mx-4 md:mx-8 mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-200 shadow-xs shrink-0">
-          <div className="flex items-center gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>
+        <div className="mx-3 md:mx-6 mt-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-2 text-xs text-amber-800 dark:text-amber-200 shadow-2xs shrink-0">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="text-[11px]">
               {!cliStatus.authConfigured ? (
                 <>
-                  <strong>GEMINI_API_KEY não detectada:</strong> Defina a variável de ambiente <code>GEMINI_API_KEY</code> para que o Gemini CLI execute as requisições.
+                  <strong>GEMINI_API_KEY ausente:</strong> Configure a chave no ambiente para requisições.
                 </>
               ) : (
                 <>
-                  <strong>Alerta de API:</strong> A chave no ambiente apresentou erro na validação com o Google Gemini. {cliStatus.apiError ? `(${cliStatus.apiError})` : ''}
+                  <strong>Alerta de API:</strong> {cliStatus.apiError || 'Erro na validação da chave.'}
                 </>
               )}
             </span>
@@ -277,41 +277,40 @@ export const ChatView: React.FC<ChatViewProps> = ({
           {onOpenSettings && (
             <button
               onClick={() => onOpenSettings('cli')}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition whitespace-nowrap cursor-pointer shadow-xs"
+              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-medium rounded-md transition whitespace-nowrap cursor-pointer shadow-2xs"
             >
-              Ver Status da API
+              Configurar
             </button>
           )}
         </div>
       )}
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-6">
+      <div className="flex-1 overflow-y-auto px-3 md:px-6 py-4 space-y-4">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-12">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600/10 to-indigo-500/10 border border-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-4 shadow-sm">
-              <Bot className="w-7 h-7" />
+          <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-8">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600/15 to-indigo-500/15 border border-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-3 shadow-2xs">
+              <Bot className="w-5 h-5" />
             </div>
-            <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
-              Gemini CLI {cliStatus?.version || '...'} Workspace
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              Gemini CLI Workspace
             </h2>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1.5 leading-relaxed">
-              Interface local operando diretamente o processo real do Gemini CLI. Digite uma instrução, utilize um
-              comando operacional ou acione o ditado por voz.
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-sm">
+              Envie instruções, utilize comandos rápidos com '/' ou ative o microfone para ditado por voz.
             </p>
 
             {/* Quick Operational Shortcuts */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-8 w-full">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mt-5 w-full">
               {commands.slice(0, 6).map((cmd) => (
                 <button
                   key={cmd.name}
                   onClick={() => selectCommand(cmd)}
-                  className="flex flex-col items-start p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-blue-500/50 dark:hover:border-blue-500/50 transition text-left group shadow-xs"
+                  className="flex flex-col items-start p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-blue-500/50 dark:hover:border-blue-500/50 transition text-left group shadow-2xs cursor-pointer"
                 >
                   <span className="font-mono text-xs font-semibold text-blue-600 dark:text-blue-400 group-hover:underline">
                     {cmd.name}
                   </span>
-                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 mt-1">
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate w-full mt-0.5">
                     {cmd.description}
                   </span>
                 </button>
@@ -336,29 +335,29 @@ export const ChatView: React.FC<ChatViewProps> = ({
             return (
               <div
                 key={msg.id}
-                className={`flex gap-3 max-w-4xl mx-auto ${isUser ? 'justify-end' : 'justify-start'}`}
+                className={`flex gap-2 max-w-4xl mx-auto ${isUser ? 'justify-end' : 'justify-start'}`}
               >
                 {!isUser && (
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-1">
-                    <Bot className="w-4 h-4" />
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                    <Bot className="w-3.5 h-3.5" />
                   </div>
                 )}
 
                 <div
-                  className={`flex-1 rounded-2xl p-4 transition ${
+                  className={`flex-1 rounded-xl p-3 transition ${
                     isUser
-                      ? 'bg-blue-600 text-white max-w-2xl ml-auto rounded-tr-none shadow-sm'
-                      : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-tl-none shadow-xs text-zinc-800 dark:text-zinc-200'
+                      ? 'bg-blue-600 text-white max-w-xl ml-auto rounded-tr-none shadow-2xs'
+                      : 'bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-tl-none shadow-2xs text-zinc-800 dark:text-zinc-200'
                   }`}
                 >
                   {/* Message Header Info */}
-                  <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-2 mb-3 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className={`font-semibold ${isUser ? 'text-blue-100' : 'text-zinc-900 dark:text-zinc-100'}`}>
-                        {isUser ? 'Usuário' : msg.agentName || currentAgent?.displayName || 'Principal Orchestrator'}
+                  <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-1.5 mb-2 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`font-semibold text-xs ${isUser ? 'text-blue-100' : 'text-zinc-900 dark:text-zinc-100'}`}>
+                        {isUser ? 'Você' : msg.agentName || currentAgent?.displayName || 'Agente'}
                       </span>
                       {!isUser && (
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border border-zinc-200/60 dark:border-zinc-700/60">
+                        <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border border-zinc-200/60 dark:border-zinc-700/60">
                           {msg.model || currentAgent?.model || 'gemini-3.5-flash-lite'}
                         </span>
                       )}
@@ -375,10 +374,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         }
                         title={
                           isRawExpanded
-                            ? 'Ocultar payload bruto desta mensagem'
-                            : 'Mostrar tudo que foi enviado e recebido do modelo nesta mensagem (Eye)'
+                            ? 'Ocultar payload bruto'
+                            : 'Inspecionar payload bruto (Eye)'
                         }
-                        className={`p-1.5 rounded transition ${
+                        className={`p-1 rounded transition cursor-pointer ${
                           isRawExpanded
                             ? 'bg-amber-500/20 text-amber-500 dark:text-amber-300 font-bold'
                             : isUser
@@ -386,7 +385,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                             : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                         }`}
                       >
-                        {isRawExpanded ? <Eye className="w-3.5 h-3.5 text-amber-500" /> : <EyeOff className="w-3.5 h-3.5" />}
+                        {isRawExpanded ? <Eye className="w-3 h-3 text-amber-500" /> : <EyeOff className="w-3 h-3" />}
                       </button>
 
                       {/* TTS Audio Narration Action */}
@@ -400,14 +399,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
                             }
                           }}
                           title={isNarrating ? 'Pausar narração' : 'Ouvir resposta (TTS)'}
-                          className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded transition ${
+                          className={`flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded transition cursor-pointer ${
                             isNarrating
                               ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300'
                               : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                           }`}
                         >
-                          {isNarrating ? <Pause className="w-3.5 h-3.5 animate-pulse" /> : <Volume2 className="w-3.5 h-3.5" />}
-                          <span>{isNarrating ? 'Pausar' : 'Ouvir'}</span>
+                          {isNarrating ? <Pause className="w-3 h-3 animate-pulse" /> : <Volume2 className="w-3 h-3" />}
+                          <span>{isNarrating ? 'Pausa' : 'Ouvir'}</span>
                         </button>
                       )}
 
@@ -415,14 +414,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       <button
                         onClick={() => handleCopy(msg.content, msg.id)}
                         title="Copiar texto"
-                        className={`p-1 rounded transition ${
+                        className={`p-1 rounded transition cursor-pointer ${
                           isUser ? 'text-blue-200 hover:text-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200'
                         }`}
                       >
                         {copiedMessageId === msg.id ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <Check className="w-3 h-3 text-emerald-400" />
                         ) : (
-                          <Copy className="w-3.5 h-3.5" />
+                          <Copy className="w-3 h-3" />
                         )}
                       </button>
                     </div>
@@ -430,79 +429,27 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
                   {/* Tool Invocations Accordion */}
                   {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
-                    <div className="mb-3 space-y-2">
+                    <div className="mb-2 space-y-1.5">
                       {msg.toolCalls.map((tc) => {
                         const isExpanded = expandedToolCalls[tc.id];
                         return (
                           <div
                             key={tc.id}
-                            className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/40 overflow-hidden text-xs"
+                            className="rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/40 overflow-hidden text-xs"
                           >
                               <button
                                 onClick={() => toggleToolCall(tc.id)}
-                                className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-zinc-100/60 dark:hover:bg-zinc-800/40 transition"
+                                className="w-full px-2.5 py-1.5 flex items-center justify-between text-left hover:bg-zinc-100/60 dark:hover:bg-zinc-800/40 transition cursor-pointer"
                               >
-                                <div className="flex items-center gap-2">
-                                  <div className="group relative flex items-center gap-2">
-                                    <Terminal className="w-3.5 h-3.5 text-blue-500" />
-                                    <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200 cursor-help underline decoration-dotted decoration-zinc-300 dark:decoration-zinc-700 underline-offset-2">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="group relative flex items-center gap-1.5">
+                                    <Terminal className="w-3 h-3 text-blue-500" />
+                                    <span className="font-mono font-medium text-xs text-zinc-800 dark:text-zinc-200 underline decoration-dotted decoration-zinc-300 dark:decoration-zinc-700 underline-offset-2">
                                       {tc.toolName}
                                     </span>
                                     
-                                    {/* Transparency Tooltip */}
-                                    <div className="absolute bottom-full left-0 mb-2 w-80 p-3 bg-zinc-900 dark:bg-zinc-800 text-zinc-100 rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 border border-zinc-700/50 font-sans text-[10px] leading-relaxed backdrop-blur-md">
-                                      <div className="space-y-2.5">
-                                        <div className="flex items-center gap-2 border-b border-zinc-700/50 pb-1.5 mb-1.5">
-                                          <Terminal className="w-3 h-3 text-blue-400" />
-                                          <span className="font-bold uppercase tracking-tight text-zinc-400">Transparência de Execução</span>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                                          <div>
-                                            <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">ID Real</span>
-                                            <code className="text-blue-400 break-all font-mono">{tc.toolName}</code>
-                                          </div>
-                                          <div>
-                                            <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Origem</span>
-                                            <span className={tc.origin ? 'text-zinc-200' : 'text-zinc-500 italic'}>{tc.origin || 'Não disponível'}</span>
-                                          </div>
-                                          <div className="col-span-2">
-                                            <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Descrição</span>
-                                            <span className={tc.description ? 'text-zinc-200' : 'text-zinc-500 italic'}>{tc.description || 'Não disponível'}</span>
-                                          </div>
-                                          <div>
-                                            <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Registro</span>
-                                            <span className={tc.componentRegister ? 'text-zinc-200' : 'text-zinc-500 italic'}>{tc.componentRegister || 'Não disponível'}</span>
-                                          </div>
-                                          <div>
-                                            <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Executor</span>
-                                            <span className={tc.componentExecutor ? 'text-zinc-200' : 'text-zinc-500 italic'}>{tc.componentExecutor || 'Não disponível'}</span>
-                                          </div>
-                                          {tc.wrapperRelation && (
-                                            <div className="col-span-2">
-                                              <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Wrapper / Adapter</span>
-                                              <span className="text-zinc-200">{tc.wrapperRelation}</span>
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div>
-                                          <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Parâmetros Efetivos</span>
-                                          <pre className="text-emerald-400 overflow-x-auto max-h-24 p-1.5 bg-black/40 rounded-lg font-mono text-[9px] border border-white/5 whitespace-pre-wrap break-all">
-                                            {JSON.stringify(tc.parameters, null, 2)}
-                                          </pre>
-                                        </div>
-                                        {tc.schema && (
-                                          <div>
-                                            <span className="text-zinc-500 font-bold uppercase tracking-tighter block mb-0.5 text-[9px]">Schema / Definição</span>
-                                            <pre className="text-amber-400 overflow-x-auto max-h-24 p-1.5 bg-black/40 rounded-lg font-mono text-[9px] border border-white/5 whitespace-pre-wrap break-all">
-                                              {JSON.stringify(tc.schema, null, 2)}
-                                            </pre>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                    
                                     <span
-                                      className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold ${
+                                      className={`text-[9px] px-1 py-0.2 rounded uppercase font-semibold ${
                                         tc.status === 'completed'
                                           ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
                                           : tc.status === 'running'
@@ -514,21 +461,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
                                     </span>
                                   </div>
                                 </div>
-                                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                                {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                               </button>
 
                             {isExpanded && (
-                              <div className="p-3 border-t border-zinc-200/80 dark:border-zinc-800 font-mono text-[11px] bg-zinc-900 text-zinc-100 space-y-2 overflow-x-auto">
+                              <div className="p-2.5 border-t border-zinc-200/80 dark:border-zinc-800 font-mono text-[10px] bg-zinc-900 text-zinc-100 space-y-1.5 overflow-x-auto">
                                 <div>
-                                  <span className="text-zinc-400 block mb-1">Parâmetros:</span>
-                                  <pre className="p-2 rounded bg-black/40 text-emerald-400 whitespace-pre-wrap break-all">
+                                  <span className="text-zinc-400 block mb-0.5">Parâmetros:</span>
+                                  <pre className="p-1.5 rounded bg-black/40 text-emerald-400 whitespace-pre-wrap break-all">
                                     {JSON.stringify(tc.parameters, null, 2)}
                                   </pre>
                                 </div>
                                 {tc.result && (
                                   <div>
-                                    <span className="text-zinc-400 block mb-1">Resultado:</span>
-                                    <pre className="p-2 rounded bg-black/40 text-zinc-300 max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
+                                    <span className="text-zinc-400 block mb-0.5">Resultado:</span>
+                                    <pre className="p-1.5 rounded bg-black/40 text-zinc-300 max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
                                       {tc.result}
                                     </pre>
                                   </div>
@@ -542,16 +489,16 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   )}
 
                   {/* Main Message Content */}
-                  <div className="text-sm leading-relaxed whitespace-pre-wrap font-sans">
+                  <div className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-sans">
                     {msg.content}
                     {msg.isStreaming && (
-                      <span className="inline-block w-2 h-4 ml-1 bg-blue-500 animate-pulse align-middle" />
+                      <span className="inline-block w-1.5 h-3.5 ml-1 bg-blue-500 animate-pulse align-middle" />
                     )}
                   </div>
 
                   {/* Timestamp */}
                   <div
-                    className={`text-[10px] mt-2 font-mono ${
+                    className={`text-[9px] mt-1.5 font-mono ${
                       isUser ? 'text-blue-100 text-right' : 'text-zinc-400 text-left'
                     }`}
                   >
@@ -572,83 +519,83 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
       {/* Floating Cancel Button when running */}
       {isStreaming && (
-        <div className="absolute top-4 right-6 z-10">
+        <div className="absolute top-3 right-4 z-10">
           <button
             onClick={onCancelExecution}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-md transition animate-pulse"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-md transition animate-pulse cursor-pointer"
           >
-            <Square className="w-3.5 h-3.5 fill-current" />
-            <span>Interromper CLI</span>
+            <Square className="w-3 h-3 fill-current" />
+            <span>Parar</span>
           </button>
         </div>
       )}
 
       {/* Input Bar Area */}
-      <div className="border-t border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md p-3 md:p-4 shrink-0 relative">
+      <div className="border-t border-zinc-200/80 dark:border-zinc-800 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md p-2.5 sm:p-3 shrink-0 relative">
         {/* Commands Autocomplete Popup */}
         {showCommandsPopup && matchingCommands.length > 0 && (
-          <div className="absolute bottom-full left-4 right-4 md:left-8 md:right-8 mb-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg overflow-hidden max-h-60 overflow-y-auto z-30">
-            <div className="px-3 py-2 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider border-b border-zinc-100 dark:border-zinc-800">
-              Comandos Operacionais Disponíveis
+          <div className="absolute bottom-full left-3 right-3 md:left-6 md:right-6 mb-1.5 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg overflow-hidden max-h-52 overflow-y-auto z-30">
+            <div className="px-2.5 py-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider border-b border-zinc-100 dark:border-zinc-800">
+              Comandos Rápidos
             </div>
             {matchingCommands.map((cmd, idx) => (
               <button
                 key={cmd.name}
                 onClick={() => selectCommand(cmd)}
-                className={`w-full px-3 py-2 text-left flex items-center justify-between text-xs transition ${
+                className={`w-full px-2.5 py-1.5 text-left flex items-center justify-between text-xs transition cursor-pointer ${
                   idx === selectedCommandIndex
                     ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300'
                     : 'text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                 }`}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <span className="font-mono font-bold">{cmd.name}</span>
-                  <span className="text-zinc-500 text-[11px] truncate">{cmd.description}</span>
+                  <span className="text-zinc-500 text-[10px] truncate">{cmd.description}</span>
                 </div>
-                <span className="text-[10px] text-zinc-400 font-mono">Tab/Enter</span>
+                <span className="text-[9px] text-zinc-400 font-mono">Tab/Enter</span>
               </button>
             ))}
           </div>
         )}
 
-        <div className="max-w-4xl mx-auto flex flex-col gap-2">
+        <div className="max-w-4xl mx-auto flex flex-col gap-1.5">
           {/* Input Box */}
-          <div className="flex items-end gap-2 bg-zinc-100 dark:bg-zinc-800/80 rounded-2xl p-2 border border-zinc-200 dark:border-zinc-700/60 focus-within:border-blue-500/80 focus-within:ring-2 focus-within:ring-blue-500/20 transition">
+          <div className="flex items-end gap-1.5 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl p-1.5 border border-zinc-200 dark:border-zinc-700/60 focus-within:border-blue-500/80 focus-within:ring-1 focus-within:ring-blue-500/20 transition">
             {/* Microphone Button (STT) */}
             <button
               onClick={isRecording ? stopRecording : startRecording}
               disabled={isTranscribing}
-              title={isRecording ? 'Parar gravação e transcrever' : 'Ditado por voz (gemini-3.5-transcribe)'}
-              className={`p-2.5 rounded-xl transition shrink-0 ${
+              title={isRecording ? 'Parar gravação' : 'Ditado por voz'}
+              className={`p-2 rounded-lg transition shrink-0 cursor-pointer ${
                 isRecording
-                  ? 'bg-rose-600 text-white animate-pulse shadow-sm'
+                  ? 'bg-rose-600 text-white animate-pulse shadow-2xs'
                   : isTranscribing
                   ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600'
                   : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700'
               }`}
             >
               {isRecording ? (
-                <Square className="w-4 h-4 fill-current" />
+                <Square className="w-3.5 h-3.5 fill-current" />
               ) : isTranscribing ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <Mic className="w-4 h-4" />
+                <Mic className="w-3.5 h-3.5" />
               )}
             </button>
 
             {/* Recording Feedback Banner */}
             {isRecording ? (
-              <div className="flex-1 flex items-center justify-between px-3 py-2 text-xs font-medium text-rose-600 dark:text-rose-400">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping" />
-                  <span>Gravando áudio ({recordingSeconds}s)... Fale claramente em português.</span>
+              <div className="flex-1 flex items-center justify-between px-2 py-1 text-xs font-medium text-rose-600 dark:text-rose-400">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
+                  <span>Gravando ({recordingSeconds}s)...</span>
                 </div>
-                <span className="text-[11px] text-zinc-500">Clique no botão para finalizar</span>
+                <span className="text-[10px] text-zinc-500">Clique para enviar</span>
               </div>
             ) : isTranscribing ? (
-              <div className="flex-1 flex items-center gap-2 px-3 py-2 text-xs text-amber-600 dark:text-amber-400 font-medium">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Transcrevendo fala via modelo gemini-3.5-transcribe...</span>
+              <div className="flex-1 flex items-center gap-1.5 px-2 py-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>Transcrevendo áudio...</span>
               </div>
             ) : (
               <textarea
@@ -656,9 +603,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 value={inputText}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Instrua o Gemini CLI... (digite '/' para comandos como /debug, /git:commit)"
+                placeholder="Digite sua instrução... (use '/' para comandos rápidos)"
                 rows={1}
-                className="flex-1 bg-transparent border-0 outline-none resize-none text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 px-2 py-1 max-h-44"
+                className="flex-1 bg-transparent border-0 outline-none resize-none text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 px-1.5 py-1 max-h-36"
               />
             )}
 
@@ -667,33 +614,33 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <button
                 onClick={onCancelExecution}
                 title="Interromper execução"
-                className="p-2.5 rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition shrink-0 shadow-sm"
+                className="p-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition shrink-0 shadow-2xs cursor-pointer"
               >
-                <Square className="w-4 h-4 fill-current" />
+                <Square className="w-3.5 h-3.5 fill-current" />
               </button>
             ) : (
               <button
                 onClick={handleSend}
                 disabled={!inputText.trim() || isRecording || isTranscribing}
-                title="Enviar para Gemini CLI (Enter)"
-                className="p-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600 transition shrink-0 shadow-sm"
+                title="Enviar (Enter)"
+                className="p-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600 transition shrink-0 shadow-2xs cursor-pointer"
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
           {/* Active Context & Settings Row (Below Input Box) */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-zinc-500 px-1 mt-1 gap-2">
+          <div className="flex flex-wrap items-center justify-between text-xs text-zinc-500 px-0.5 gap-1.5">
             {/* Left side: Agent select */}
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-medium text-zinc-400">Agente:</span>
-              <div className="flex items-center gap-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 px-2.5 py-1 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm transition">
-                <Bot className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-medium text-zinc-400">Agente:</span>
+              <div className="flex items-center gap-1 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 px-2 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 transition">
+                <Bot className="w-3 h-3 text-blue-500 shrink-0" />
                 <select
                   value={selectedAgentId}
                   onChange={(e) => onSelectAgent(e.target.value)}
-                  className="bg-transparent text-[11px] font-bold text-zinc-800 dark:text-zinc-200 outline-none pr-1 cursor-pointer"
+                  className="bg-transparent text-[10px] font-bold text-zinc-800 dark:text-zinc-200 outline-none pr-1 cursor-pointer"
                 >
                   {(agents && agents.length > 0 ? agents : DEFAULT_AGENTS).map((agent) => (
                     <option key={agent.id} value={agent.id} className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
@@ -705,10 +652,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </div>
 
             {/* Right side: Clickable Approval Mode Selector */}
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-medium text-zinc-400 font-sans">Modo de Aprovação:</span>
-              <div className="flex items-center gap-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 px-2.5 py-1 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm transition">
-                <Sliders className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-medium text-zinc-400">Aprovação:</span>
+              <div className="flex items-center gap-1 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 px-2 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 transition">
+                <Sliders className="w-3 h-3 text-amber-500 shrink-0" />
                 <select
                   value={approvalMode}
                   onChange={(e) => {
@@ -716,19 +663,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       onChangeApprovalMode(e.target.value as any);
                     }
                   }}
-                  className="bg-transparent text-[11px] font-bold text-zinc-800 dark:text-zinc-200 outline-none pr-1 cursor-pointer font-sans"
+                  className="bg-transparent text-[10px] font-bold text-zinc-800 dark:text-zinc-200 outline-none pr-1 cursor-pointer"
                 >
                   <option value="default" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
-                    Padrão (Confirmar comandos)
+                    Padrão (Confirmar)
                   </option>
                   <option value="auto_edit" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
-                    Auto-Editar (Foco em edição)
+                    Auto-Editar
                   </option>
                   <option value="yolo" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
-                    YOLO (Executar tudo direto)
+                    YOLO (Direto)
                   </option>
                   <option value="plan" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200">
-                    Planejar (Planejar antes)
+                    Planejar
                   </option>
                 </select>
               </div>

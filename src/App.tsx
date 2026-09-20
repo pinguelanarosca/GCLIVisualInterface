@@ -1156,6 +1156,8 @@ export function App() {
         projects={projects}
         theme={theme}
         onChangeTheme={setTheme}
+        selectedAgentId={selectedAgentId}
+        onSelectAgent={setSelectedAgentId}
       />
     </div>
   );
