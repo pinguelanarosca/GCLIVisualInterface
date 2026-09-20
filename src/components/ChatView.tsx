@@ -563,6 +563,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <div className="flex items-end gap-1.5 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl p-1.5 border border-zinc-200 dark:border-zinc-700/60 focus-within:border-blue-500/80 focus-within:ring-1 focus-within:ring-blue-500/20 transition">
             {/* Microphone Button (STT) */}
             <button
+              type="button"
               onClick={isRecording ? stopRecording : startRecording}
               disabled={isTranscribing}
               title={isRecording ? 'Parar gravação' : 'Ditado por voz'}
@@ -612,6 +613,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             {/* Send / Stop Button */}
             {isStreaming ? (
               <button
+                type="button"
                 onClick={onCancelExecution}
                 title="Interromper execução"
                 className="p-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition shrink-0 shadow-2xs cursor-pointer"
@@ -620,6 +622,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               </button>
             ) : (
               <button
+                type="button"
                 onClick={handleSend}
                 disabled={!inputText.trim() || isRecording || isTranscribing}
                 title="Enviar (Enter)"

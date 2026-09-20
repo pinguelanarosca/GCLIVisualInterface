@@ -731,7 +731,26 @@ priority = 90
 
   if (!isProduction) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        watch: {
+          ignored: [
+            '**/.gemini/**',
+            '**/.gemini-gui*/**',
+            '**/.gemini-gui*.*',
+            '**/projects-data/**',
+            '**/node_modules/**',
+            '**/.git/**',
+            '**/dist/**',
+            '**/.env*',
+            '**/*.json',
+            '**/*.toml',
+            '**/*.log',
+            '**/logs/**',
+            '**/tmp/**',
+          ],
+        },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
