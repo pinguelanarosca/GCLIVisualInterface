@@ -17,32 +17,39 @@ export const DEFAULT_DENY_GOOGLE_SEARCH_TOML = `# User Policy: Global Denial of 
 
 [[rule]]
 name = "Deny Google Web Search"
-toolName = "google_web_search"
+toolName = ["google_web_search", "web_search"]
 decision = "deny"
-priority = 1000
+priority = 999
 denyMessage = "google_web_search está desativado globalmente pela Política de Segurança. Utilize a ferramenta web_search_exa do MCP Exa."
 modes = ["default", "autoEdit", "yolo", "plan"]
 `;
 
 export function ensureDefaultUserPolicies(): void {
-  const userDir = getUserPoliciesDirectory();
-  if (!fs.existsSync(userDir)) {
-    fs.mkdirSync(userDir, { recursive: true });
-  }
+  const dirs = [
+    '/etc/gemini-cli/policies',
+    getUserPoliciesDirectory(),
+    getPoliciesDirectory(),
+  ];
 
-  const defaultUserPolicyPath = path.join(userDir, 'deny-google-search.toml');
-  if (!fs.existsSync(defaultUserPolicyPath)) {
-    fs.writeFileSync(defaultUserPolicyPath, DEFAULT_DENY_GOOGLE_SEARCH_TOML, 'utf8');
-  }
+  for (const dir of dirs) {
+    try {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
 
-  // Sincronizar também no workspace para redundância
-  const workspaceDir = getPoliciesDirectory();
-  if (!fs.existsSync(workspaceDir)) {
-    fs.mkdirSync(workspaceDir, { recursive: true });
-  }
-  const defaultWsPolicyPath = path.join(workspaceDir, 'deny-google-search.toml');
-  if (!fs.existsSync(defaultWsPolicyPath)) {
-    fs.writeFileSync(defaultWsPolicyPath, DEFAULT_DENY_GOOGLE_SEARCH_TOML, 'utf8');
+      const policyPath = path.join(dir, 'deny-google-search.toml');
+      if (!fs.existsSync(policyPath)) {
+        fs.writeFileSync(policyPath, DEFAULT_DENY_GOOGLE_SEARCH_TOML, 'utf8');
+      } else {
+        const content = fs.readFileSync(policyPath, 'utf8');
+        if (content.includes('priority = 1000') || content.includes('priority=1000')) {
+          const updated = content.replace(/priority\s*=\s*1000/g, 'priority = 999');
+          fs.writeFileSync(policyPath, updated, 'utf8');
+        }
+      }
+    } catch (err) {
+      // ignore write errors for restricted directories
+    }
   }
 }
 
