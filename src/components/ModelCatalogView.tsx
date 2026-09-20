@@ -186,9 +186,30 @@ export const ModelCatalogView: React.FC<ModelCatalogViewProps> = ({
                 Agentes Titulares & Auto-Fallback Reserva
               </h4>
               <p className="text-[11px] text-blue-700/80 dark:text-blue-300/70">
-                Selecione o agente principal, altere os modelos titulares e configure o agente reserva para failover em erros 429/500/503.
+                Selecione o agente principal e configure o agente reserva para failover em erros 429/500/503.
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Top Control Bar: Active Titular Agent Selector & Reset Button */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1 pb-2 border-b border-blue-100 dark:border-blue-900/40">
+          <div className="flex items-center gap-2 flex-1 max-w-md">
+            <Bot className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+            <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 shrink-0">
+              Agente Titular:
+            </span>
+            <select
+              value={selectedAgentId || 'principal'}
+              onChange={(e) => handleSelectPrimary(e.target.value)}
+              className="w-full bg-white dark:bg-zinc-900 border border-blue-300 dark:border-blue-700/80 rounded-lg py-1 px-2 text-xs font-semibold text-blue-700 dark:text-blue-300 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-2xs"
+            >
+              {(agents && agents.length > 0 ? agents : defaultAgentPairs.map(d => ({ id: d.id, name: d.id, displayName: d.role, model: d.primaryModel }))).map((ag) => (
+                <option key={ag.id} value={ag.id}>
+                  {ag.displayName || ag.name} — Modelo: {ag.model}
+                </option>
+              ))}
+            </select>
           </div>
 
           <button
@@ -260,28 +281,26 @@ export const ModelCatalogView: React.FC<ModelCatalogViewProps> = ({
                     </span>
                   </div>
 
-                  {/* Primary Model Select */}
+                  {/* Assigned Agent Select */}
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-zinc-500 dark:text-zinc-400">Modelo Titular:</span>
-                      <span className="text-zinc-400 font-mono text-[9px]">{item.quota}</span>
+                      <span className="text-zinc-500 dark:text-zinc-400">Agente Atribuído:</span>
+                      <span className="text-zinc-400 font-mono text-[9px]">{currentAgent?.model || item.primaryModel}</span>
                     </div>
 
                     <select
                       className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md py-1 px-1.5 text-[11px] font-medium text-blue-700 dark:text-blue-300 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                      value={currentAgent?.model || item.primaryModel}
-                      onChange={(e) => handleModelChange(item.id, e.target.value)}
+                      value={currentAgent?.id || item.id}
+                      onChange={(e) => {
+                        const targetId = e.target.value;
+                        handleSelectPrimary(targetId);
+                      }}
                     >
-                      {MODELS_CATALOG.filter((m) => m.group === 'text').map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} ({m.rpm} RPM | {m.rpd} RPD)
+                      {agents.map((ag) => (
+                        <option key={ag.id} value={ag.id}>
+                          {ag.displayName || ag.name} ({ag.model})
                         </option>
                       ))}
-                      {!MODELS_CATALOG.filter((m) => m.group === 'text').some((m) => m.id === (currentAgent?.model || item.primaryModel)) && (
-                        <option value={currentAgent?.model || item.primaryModel}>
-                          {currentAgent?.model || item.primaryModel}
-                        </option>
-                      )}
                     </select>
                   </div>
                 </div>
