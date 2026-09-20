@@ -8,7 +8,8 @@ toolName = [
   "write_file",
   "activate_skill",
   "web_fetch",
-  "google_web_search"
+  "web_search_exa"
 ]
 decision = "allow"
 priority = 5
+

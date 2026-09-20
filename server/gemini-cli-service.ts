@@ -570,8 +570,10 @@ export function executeGeminiCli(
     '--skip-trust',
   ];
 
-  // Carregar todas as políticas do usuário (.gemini/policies/*.toml)
+  // Carregar todas as políticas do usuário e workspace (~/.gemini/policies/*.toml e .gemini/policies/*.toml)
+  const userPoliciesDir = path.join(os.homedir(), '.gemini', 'policies');
   const policyDirs = [
+    userPoliciesDir,
     path.join(cwd, '.gemini', 'policies'),
     path.join(process.cwd(), '.gemini', 'policies'),
   ];

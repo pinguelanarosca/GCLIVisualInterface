@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { McpConfig } from '../src/types.js';
 import { getResolvedCliPath } from './gemini-cli-service.js';
@@ -16,6 +17,17 @@ const INITIAL_GITHUB_MCP: McpConfig = {
   statusGrade: 'CONFIGURED',
 };
 
+const INITIAL_EXA_MCP: McpConfig = {
+  name: 'exa',
+  httpUrl: 'https://mcp.exa.ai/mcp',
+  env: {
+    EXA_API_KEY: '$EXA_API_KEY',
+  },
+  enabled: true,
+  status: 'stopped',
+  statusGrade: 'CONFIGURED',
+};
+
 export function getSettingsFilePath(targetDir?: string): string {
   const base = targetDir || process.cwd();
   return path.join(base, '.gemini', 'settings.json');
@@ -23,40 +35,57 @@ export function getSettingsFilePath(targetDir?: string): string {
 
 export function loadMcpSettings(targetDir?: string): McpConfig[] {
   const settingsFile = getSettingsFilePath(targetDir);
-  if (!fs.existsSync(settingsFile)) {
-    // Seed initial GitHub MCP
-    saveMcpSettings([INITIAL_GITHUB_MCP], targetDir);
-    return [INITIAL_GITHUB_MCP];
+  let mcpServers: Record<string, any> = {};
+
+  if (fs.existsSync(settingsFile)) {
+    try {
+      const raw = fs.readFileSync(settingsFile, 'utf8');
+      const parsed = JSON.parse(raw);
+      mcpServers = parsed.mcpServers || {};
+    } catch {
+      mcpServers = {};
+    }
   }
 
-  try {
-    const raw = fs.readFileSync(settingsFile, 'utf8');
-    const parsed = JSON.parse(raw);
-    const mcpServers = parsed.mcpServers || {};
+  let modified = false;
 
-    const list: McpConfig[] = [];
-    for (const [name, server] of Object.entries<any>(mcpServers)) {
-      list.push({
-        name,
-        command: server.command,
-        args: server.args || [],
-        httpUrl: server.httpUrl,
-        url: server.url,
-        env: server.env || {},
-        enabled: server.enabled !== false,
-        status: 'stopped',
-        statusGrade: 'CONFIGURED',
-      });
-    }
-
-    if (list.length === 0) {
-      list.push(INITIAL_GITHUB_MCP);
-      saveMcpSettings(list, targetDir);
-    }
-    return list;
-  } catch {
-    return [INITIAL_GITHUB_MCP];
+  if (!mcpServers.github) {
+    mcpServers.github = {
+      command: INITIAL_GITHUB_MCP.command,
+      args: INITIAL_GITHUB_MCP.args,
+      env: INITIAL_GITHUB_MCP.env,
+    };
+    modified = true;
   }
+
+  if (!mcpServers.exa) {
+    mcpServers.exa = {
+      httpUrl: INITIAL_EXA_MCP.httpUrl,
+      env: INITIAL_EXA_MCP.env,
+    };
+    modified = true;
+  }
+
+  const list: McpConfig[] = [];
+  for (const [name, server] of Object.entries<any>(mcpServers)) {
+    list.push({
+      name,
+      command: server.command,
+      args: server.args || [],
+      httpUrl: server.httpUrl,
+      url: server.url,
+      env: server.env || {},
+      enabled: server.enabled !== false,
+      status: 'stopped',
+      statusGrade: 'CONFIGURED',
+    });
+  }
+
+  if (modified) {
+    saveMcpSettings(list, targetDir);
+  }
+
+  return list;
 }
 
 export function saveMcpSettings(servers: McpConfig[], targetDir?: string) {
@@ -93,6 +122,30 @@ export function saveMcpSettings(servers: McpConfig[], targetDir?: string) {
 
   settings.mcpServers = mcpServers;
   fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf8');
+
+  // Sincronizar também no ~/.gemini/settings.json para a CLI do sistema
+  try {
+    const globalSettingsPath = path.join(os.homedir(), '.gemini', 'settings.json');
+    const globalDir = path.dirname(globalSettingsPath);
+    if (!fs.existsSync(globalDir)) {
+      fs.mkdirSync(globalDir, { recursive: true });
+    }
+    let globalSettings: any = {};
+    if (fs.existsSync(globalSettingsPath)) {
+      try {
+        globalSettings = JSON.parse(fs.readFileSync(globalSettingsPath, 'utf8'));
+      } catch {
+        globalSettings = {};
+      }
+    }
+    globalSettings.mcpServers = {
+      ...(globalSettings.mcpServers || {}),
+      ...mcpServers,
+    };
+    fs.writeFileSync(globalSettingsPath, JSON.stringify(globalSettings, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Erro ao salvar mcpServers em ~/.gemini/settings.json:', err);
+  }
 }
 
 export async function testMcpServer(mcp: McpConfig): Promise<{ success: boolean; message: string }> {
@@ -100,19 +153,24 @@ export async function testMcpServer(mcp: McpConfig): Promise<{ success: boolean;
   if (mcp.httpUrl || mcp.url) {
     const targetUrl = mcp.httpUrl || mcp.url;
     try {
-      // Basic heartbeat test
-      const res = await fetch(targetUrl!, { method: 'GET' });
-      if (res.ok || res.status === 405 || res.status === 404) {
-        // Some MCP servers might return 405 Method Not Allowed or 404 for GET,
-        // but if the server is there, it's a good sign.
+      // Heartbeat test com headers MCP aceitos
+      const res = await fetch(targetUrl!, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json, text/event-stream',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'ping', id: 1 }),
+      });
+      if (res.ok || res.status === 405 || res.status === 406 || res.status === 404 || res.status === 200) {
         return {
           success: true,
-          message: `Servidor MCP remoto detectado em ${targetUrl} (Status: ${res.status}).`,
+          message: `Servidor MCP remoto conectado com sucesso em ${targetUrl} (Status HTTP ${res.status}).`,
         };
       }
       return {
         success: false,
-        message: `Servidor MCP remoto retornou status de erro em ${targetUrl}: ${res.status}`,
+        message: `Servidor MCP remoto retornou status ${res.status} em ${targetUrl}`,
       };
     } catch (err: any) {
       return {
@@ -182,3 +240,4 @@ export async function testMcpServer(mcp: McpConfig): Promise<{ success: boolean;
     }
   });
 }
+

@@ -41,7 +41,7 @@ import { ensureAgentsSeeded, loadAgents, saveAgentToFile, deleteAgent, resetAllA
 import { ensureSkillsSeeded, loadSkills, saveSkillToFile, deleteSkill } from './server/skills-service.js';
 import { ensureCommandsSeeded, loadCommands, saveCommandToFile, deleteCommand } from './server/commands-service.js';
 import { loadMcpSettings, saveMcpSettings, testMcpServer } from './server/mcp-service.js';
-import { loadPolicies, savePolicy, deletePolicy, renamePolicy } from './server/policies-service.js';
+import { loadPolicies, savePolicy, deletePolicy, renamePolicy, syncPoliciesToSettings, ensureDefaultUserPolicies } from './server/policies-service.js';
 import {
   getAuthorizedDirs,
   addAuthorizedDir,
@@ -107,11 +107,13 @@ async function startServer() {
     next();
   });
 
-  // Seed default agents, skills, commands, MCP
+  // Seed default agents, skills, commands, MCP, policies
   ensureAgentsSeeded();
   ensureSkillsSeeded();
   ensureCommandsSeeded();
   loadMcpSettings();
+  ensureDefaultUserPolicies();
+  syncPoliciesToSettings();
 
   // Seed custom web preview policy to prevent tool blocks in headless/preview mode
   try {
@@ -424,7 +426,7 @@ priority = 90
 
   app.post('/api/mcp/test', async (req, res) => {
     const mcp = req.body;
-    if (!mcp || !mcp.command) {
+    if (!mcp || (!mcp.command && !mcp.httpUrl && !mcp.url)) {
       return res.status(400).json({ success: false, message: 'Configuração MCP inválida.' });
     }
     const result = await testMcpServer(mcp);
