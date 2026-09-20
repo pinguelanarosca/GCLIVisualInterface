@@ -26,22 +26,16 @@ modes = ["default", "autoEdit", "yolo", "plan"]
 `;
 
 export function ensureDefaultUserPolicies(): void {
-  const dirs = [
-    '/etc/gemini-cli/policies',
-    getPoliciesDirectory(),
-  ];
-
-  for (const dir of dirs) {
-    try {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-
-      const policyPath = path.join(dir, 'deny-google-search.toml');
-      fs.writeFileSync(policyPath, DEFAULT_DENY_GOOGLE_SEARCH_TOML, 'utf8');
-    } catch (err) {
-      // ignore write errors for restricted directories
+  const wsDir = getPoliciesDirectory();
+  try {
+    if (!fs.existsSync(wsDir)) {
+      fs.mkdirSync(wsDir, { recursive: true });
     }
+
+    const policyPath = path.join(wsDir, 'deny-google-search.toml');
+    fs.writeFileSync(policyPath, DEFAULT_DENY_GOOGLE_SEARCH_TOML, 'utf8');
+  } catch (err) {
+    // ignore write errors
   }
 }
 
@@ -49,24 +43,14 @@ export function loadPolicies(targetDir?: string): PolicyConfig[] {
   ensureDefaultUserPolicies();
 
   const wsDir = getPoliciesDirectory(targetDir);
-  const systemDir = '/etc/gemini-cli/policies';
-
-  const policyDirs = Array.from(new Set([systemDir, wsDir]));
   const loadedMap = new Map<string, PolicyConfig>();
 
-  for (const pDir of policyDirs) {
-    if (!fs.existsSync(pDir)) {
-      try {
-        fs.mkdirSync(pDir, { recursive: true });
-      } catch {}
-      continue;
-    }
-
+  if (fs.existsSync(wsDir)) {
     try {
-      const files = fs.readdirSync(pDir).filter((f) => f.endsWith('.toml'));
+      const files = fs.readdirSync(wsDir).filter((f) => f.endsWith('.toml'));
       for (const file of files) {
         if (!loadedMap.has(file)) {
-          const filePath = path.join(pDir, file);
+          const filePath = path.join(wsDir, file);
           const content = fs.readFileSync(filePath, 'utf8');
           loadedMap.set(file, {
             filename: file,
@@ -75,7 +59,7 @@ export function loadPolicies(targetDir?: string): PolicyConfig[] {
         }
       }
     } catch (err) {
-      console.error(`Erro ao carregar políticas do diretório ${pDir}:`, err);
+      console.error(`Erro ao carregar políticas do diretório ${wsDir}:`, err);
     }
   }
 
@@ -103,15 +87,7 @@ export function syncPoliciesToSettings(targetDir?: string): void {
       }
     }
 
-    const systemDir = '/etc/gemini-cli/policies';
-    const allDirs = Array.from(new Set([systemDir, wsDir]));
-    const allPaths: string[] = [];
-
-    for (const d of allDirs) {
-      if (fs.existsSync(d)) {
-        allPaths.push(d);
-      }
-    }
+    const allPaths: string[] = [wsDir];
 
     settings.policyPaths = allPaths;
     settings.adminPolicyPaths = allPaths;

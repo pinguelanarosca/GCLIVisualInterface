@@ -271,27 +271,61 @@ mkdir -p /usr/local/bin /usr/bin /usr/share/applications /etc/gemini-cli/policie
 
 cat << 'EOF' > /usr/local/bin/gemini-gui
 #!/usr/bin/env bash
-set -e
 
 APP_DIR="\${GEMINI_GUI_DIR:-/opt/gemini-gui}"
 PORT="\${PORT:-3000}"
 
-echo "=================================================="
-echo "Iniciando GCLI Visual Interface (Gemini CLI GUI)"
-echo "Diretório: \$APP_DIR"
-echo "Porta: \$PORT"
-echo "=================================================="
+# Determinar o diretório home real do usuário atual
+TARGET_USER="\${SUDO_USER:-\$USER}"
+USER_HOME="\${HOME:-/root}"
+if [ -n "\$SUDO_USER" ] && [ "\$SUDO_USER" != "root" ]; then
+    SUDO_HOME=\$(eval echo "~\$SUDO_USER" 2>/dev/null || true)
+    if [ -n "\$SUDO_HOME" ]; then
+        USER_HOME="\$SUDO_HOME"
+    fi
+fi
+
+# 1. Evitar múltiplas instâncias acidentalmente na mesma porta
+if command -v curl &> /dev/null; then
+    if curl -s -m 1 "http://localhost:\$PORT/api/health" &>/dev/null; then
+        echo "A GCLI Visual Interface já está em execução e respondendo na porta \$PORT."
+        exit 0
+    fi
+fi
+
+# 2. Preparar diretório de logs isolado
+LOG_DIR="\$USER_HOME/.local/share/gemini-gui/logs"
+mkdir -p "\$LOG_DIR"
+LOG_FILE="\$LOG_DIR/gui.log"
+
+# Garantir permissões corretas para o usuário comum se rodando sob sudo
+if [ -n "\$SUDO_USER" ] && [ "\$SUDO_USER" != "root" ]; then
+    chown -R "\$SUDO_USER:" "\$USER_HOME/.local/share/gemini-gui" 2>/dev/null || true
+fi
 
 cd "\$APP_DIR"
 
+echo "=================================================="
+echo "Iniciando GCLI Visual Interface em segundo plano..."
+echo "Diretório: \$APP_DIR"
+echo "Porta: \$PORT"
+echo "Logs: \$LOG_FILE"
+echo "=================================================="
+
+# 3. Executar em background sem prender o terminal e desacoplado de SIGHUP
 if [ -f "dist/server.cjs" ]; then
-    NODE_ENV=production node dist/server.cjs
+    PORT="\$PORT" NODE_ENV=production nohup node dist/server.cjs >> "\$LOG_FILE" 2>&1 &
 elif [ -f "server.ts" ]; then
-    NODE_ENV=production npx tsx server.ts
+    PORT="\$PORT" NODE_ENV=production nohup npx tsx server.ts >> "\$LOG_FILE" 2>&1 &
 else
     echo "ERRO: Servidor compilado não encontrado em \$APP_DIR"
     exit 1
 fi
+
+# Desacoplar o último processo em segundo plano
+disown %1 2>/dev/null || true
+
+echo "Servidor iniciado em segundo plano. O terminal foi liberado."
 EOF
 
 chmod +x /usr/local/bin/gemini-gui
@@ -304,7 +338,7 @@ Name=GCLI Visual Interface
 Comment=Interface Gráfica para Gemini CLI
 Exec=/usr/local/bin/gemini-gui
 Icon=utilities-terminal
-Terminal=true
+Terminal=false
 Type=Application
 Categories=Development;Utility;
 Keywords=gemini;ai;cli;gui;gcli;

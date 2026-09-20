@@ -1,4 +1,6 @@
 import { spawn, execSync, ChildProcess } from 'node:child_process';
+import { discoverApiKeyFromLoginEnv } from './env-discovery.js';
+discoverApiKeyFromLoginEnv();
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -571,11 +573,10 @@ export function executeGeminiCli(
     '--skip-trust',
   ];
 
-  // Carregar todas as políticas do sistema, usuário e workspace
+  // Carregar políticas do usuário (leitura de segurança externa opcional se houver), da GUI e do workspace
   const userPoliciesDir = path.join(os.homedir(), '.gemini', 'policies');
   const guiPoliciesDir = path.join(getGuiDataDir(), '.gemini', 'policies');
   const policyDirs = Array.from(new Set([
-    '/etc/gemini-cli/policies',
     userPoliciesDir,
     guiPoliciesDir,
     path.join(cwd, '.gemini', 'policies'),

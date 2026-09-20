@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import { discoverApiKeyFromLoginEnv } from './server/env-discovery.js';
+discoverApiKeyFromLoginEnv();
 import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
