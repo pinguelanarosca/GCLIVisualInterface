@@ -77,6 +77,9 @@ export interface McpConfig {
   args?: string[];
   httpUrl?: string;
   url?: string;
+  type?: string;
+  trust?: boolean;
+  headers?: Record<string, string>;
   env?: Record<string, string>;
   enabled: boolean;
   status: 'connected' | 'stopped' | 'error' | 'unknown';

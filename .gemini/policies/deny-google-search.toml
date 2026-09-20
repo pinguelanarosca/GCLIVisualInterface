@@ -1,0 +1,6 @@
+[[rule]]
+name = "Deny Google Web Search"
+toolName = ["google_web_search", "web_search"]
+decision = "deny"
+priority = 999
+denyMessage = "google_web_search está desativado globalmente pela Política de Segurança. Utilize a ferramenta web_search_exa do MCP Exa."

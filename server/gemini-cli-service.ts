@@ -570,33 +570,14 @@ export function executeGeminiCli(
     '--skip-trust',
   ];
 
-  // Carregar todas as políticas do usuário e workspace (~/.gemini/policies/*.toml e .gemini/policies/*.toml)
+  // Carregar todas as políticas do sistema, usuário e workspace
   const userPoliciesDir = path.join(os.homedir(), '.gemini', 'policies');
-  const policyDirs = [
+  const policyDirs = Array.from(new Set([
+    '/etc/gemini-cli/policies',
     userPoliciesDir,
     path.join(cwd, '.gemini', 'policies'),
     path.join(process.cwd(), '.gemini', 'policies'),
-  ];
-  const foundPolicyFiles: string[] = [];
-  for (const pDir of policyDirs) {
-    if (fs.existsSync(pDir)) {
-      try {
-        const pFiles = fs.readdirSync(pDir).filter((f) => f.endsWith('.toml'));
-        for (const pf of pFiles) {
-          const fullPath = path.join(pDir, pf);
-          if (!foundPolicyFiles.includes(fullPath)) {
-            foundPolicyFiles.push(fullPath);
-          }
-        }
-      } catch {}
-    }
-  }
-
-  // Adicionar arquivos de políticas do usuário como --policy e --admin-policy
-  for (const polFile of foundPolicyFiles) {
-    args.push('--policy', polFile);
-    args.push('--admin-policy', polFile);
-  }
+  ]));
 
   // Adicionar diretórios de políticas
   for (const pDir of policyDirs) {

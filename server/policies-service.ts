@@ -105,23 +105,18 @@ export function syncPoliciesToSettings(targetDir?: string): void {
       }
     }
 
-    const allDirs = Array.from(new Set([userDir, wsDir]));
+    const systemDir = '/etc/gemini-cli/policies';
+    const allDirs = Array.from(new Set([systemDir, userDir, wsDir]));
     const allPaths: string[] = [];
 
     for (const d of allDirs) {
       if (fs.existsSync(d)) {
         allPaths.push(d);
-        try {
-          const files = fs.readdirSync(d).filter((f) => f.endsWith('.toml'));
-          for (const f of files) {
-            allPaths.push(path.join(d, f));
-          }
-        } catch {}
       }
     }
 
-    settings.policyPaths = Array.from(new Set([...(settings.policyPaths || []), ...allPaths]));
-    settings.adminPolicyPaths = Array.from(new Set([...(settings.adminPolicyPaths || []), ...allPaths]));
+    settings.policyPaths = allPaths;
+    settings.adminPolicyPaths = allPaths;
 
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
 
@@ -135,8 +130,8 @@ export function syncPoliciesToSettings(targetDir?: string): void {
         globalSettings = {};
       }
     }
-    globalSettings.policyPaths = Array.from(new Set([...(globalSettings.policyPaths || []), ...allPaths]));
-    globalSettings.adminPolicyPaths = Array.from(new Set([...(globalSettings.adminPolicyPaths || []), ...allPaths]));
+    globalSettings.policyPaths = allPaths;
+    globalSettings.adminPolicyPaths = allPaths;
     fs.writeFileSync(globalSettingsPath, JSON.stringify(globalSettings, null, 2), 'utf8');
 
   } catch (err) {

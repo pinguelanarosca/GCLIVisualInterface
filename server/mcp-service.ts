@@ -19,7 +19,12 @@ const INITIAL_GITHUB_MCP: McpConfig = {
 
 const INITIAL_EXA_MCP: McpConfig = {
   name: 'exa',
-  httpUrl: 'https://mcp.exa.ai/mcp',
+  url: 'https://mcp.exa.ai/mcp',
+  type: 'http',
+  trust: true,
+  headers: {
+    'x-api-key': '$EXA_API_KEY',
+  },
   env: {
     EXA_API_KEY: '$EXA_API_KEY',
   },
@@ -58,9 +63,13 @@ export function loadMcpSettings(targetDir?: string): McpConfig[] {
     modified = true;
   }
 
-  if (!mcpServers.exa) {
+  if (!mcpServers.exa || !mcpServers.exa.trust || !mcpServers.exa.headers) {
     mcpServers.exa = {
+      url: INITIAL_EXA_MCP.url,
       httpUrl: INITIAL_EXA_MCP.httpUrl,
+      type: INITIAL_EXA_MCP.type,
+      trust: INITIAL_EXA_MCP.trust,
+      headers: INITIAL_EXA_MCP.headers,
       env: INITIAL_EXA_MCP.env,
     };
     modified = true;
@@ -74,6 +83,9 @@ export function loadMcpSettings(targetDir?: string): McpConfig[] {
       args: server.args || [],
       httpUrl: server.httpUrl,
       url: server.url,
+      type: server.type,
+      trust: server.trust,
+      headers: server.headers,
       env: server.env || {},
       enabled: server.enabled !== false,
       status: 'stopped',
@@ -113,8 +125,14 @@ export function saveMcpSettings(servers: McpConfig[], targetDir?: string) {
 
       if (s.command) serverConfig.command = s.command;
       if (s.args && s.args.length > 0) serverConfig.args = s.args;
-      if (s.httpUrl) serverConfig.httpUrl = s.httpUrl;
-      if (s.url) serverConfig.url = s.url;
+      if (s.url) {
+        serverConfig.url = s.url;
+      } else if (s.httpUrl) {
+        serverConfig.httpUrl = s.httpUrl;
+      }
+      if (s.type) serverConfig.type = s.type;
+      if (s.trust !== undefined) serverConfig.trust = s.trust;
+      if (s.headers) serverConfig.headers = s.headers;
 
       mcpServers[s.name] = serverConfig;
     }

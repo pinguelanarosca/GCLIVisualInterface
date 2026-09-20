@@ -7,13 +7,25 @@
         "-y",
         "@modelcontextprotocol/server-github"
       ]
+    },
+    "exa": {
+      "env": {
+        "EXA_API_KEY": "$EXA_API_KEY"
+      },
+      "httpUrl": "https://mcp.exa.ai/mcp",
+      "url": "https://mcp.exa.ai/mcp",
+      "type": "http",
+      "trust": true,
+      "headers": {
+        "x-api-key": "$EXA_API_KEY"
+      }
     }
   },
   "modelConfigs": {
     "customAliases": {
-      "worker": {
+      "principal": {
         "modelConfig": {
-          "model": "gemini-3.1-flash-lite",
+          "model": "gemini-3.5-flash-lite",
           "generateContentConfig": {
             "temperature": 0.2,
             "topP": 0.95,
@@ -21,13 +33,39 @@
           }
         }
       },
-      "gemini-3.1-flash-lite": {
+      "gemini-3.5-flash-lite": {
         "modelConfig": {
-          "model": "gemini-3.1-flash-lite",
+          "model": "gemini-3.5-flash-lite",
           "generateContentConfig": {
             "temperature": 0.2,
             "topP": 0.95,
             "topK": 40
+          }
+        }
+      },
+      "aaa": {
+        "modelConfig": {
+          "model": "gemini-3.1-flash-lite",
+          "generateContentConfig": {
+            "temperature": 2,
+            "topP": 1,
+            "topK": 40,
+            "thinkingConfig": {
+              "includeThoughts": true
+            }
+          }
+        }
+      },
+      "gemini-3.1-flash-lite": {
+        "modelConfig": {
+          "model": "gemini-3.1-flash-lite",
+          "generateContentConfig": {
+            "temperature": 2,
+            "topP": 1,
+            "topK": 40,
+            "thinkingConfig": {
+              "includeThoughts": true
+            }
           }
         }
       },
@@ -91,26 +129,6 @@
           }
         }
       },
-      "principal": {
-        "modelConfig": {
-          "model": "gemini-3.5-flash-lite",
-          "generateContentConfig": {
-            "temperature": 0.2,
-            "topP": 0.95,
-            "topK": 40
-          }
-        }
-      },
-      "gemini-3.5-flash-lite": {
-        "modelConfig": {
-          "model": "gemini-3.5-flash-lite",
-          "generateContentConfig": {
-            "temperature": 0.2,
-            "topP": 0.95,
-            "topK": 40
-          }
-        }
-      },
       "tester": {
         "modelConfig": {
           "model": "gemini-3-flash",
@@ -130,6 +148,16 @@
             "topK": 40
           }
         }
+      },
+      "worker": {
+        "modelConfig": {
+          "model": "gemini-3.1-flash-lite",
+          "generateContentConfig": {
+            "temperature": 0.2,
+            "topP": 0.95,
+            "topK": 40
+          }
+        }
       }
     },
     "overrides": [
@@ -138,7 +166,7 @@
           "overrideScope": "core"
         },
         "modelConfig": {
-          "model": "gemini-3.1-flash-lite",
+          "model": "gemini-3.5-flash-lite",
           "generateContentConfig": {
             "temperature": 0.2,
             "topP": 0.95,
@@ -148,10 +176,10 @@
       },
       {
         "match": {
-          "model": "gemini-3.1-flash-lite"
+          "model": "gemini-3.5-flash-lite"
         },
         "modelConfig": {
-          "model": "gemini-3.1-flash-lite",
+          "model": "gemini-3.5-flash-lite",
           "generateContentConfig": {
             "temperature": 0.2,
             "topP": 0.95,
@@ -161,15 +189,31 @@
       },
       {
         "match": {
-          "model": "gemini-3.1-flash-lite",
+          "model": "gemini-3.5-flash-lite",
           "overrideScope": "core"
         },
         "modelConfig": {
-          "model": "gemini-3.1-flash-lite",
+          "model": "gemini-3.5-flash-lite",
           "generateContentConfig": {
             "temperature": 0.2,
             "topP": 0.95,
             "topK": 40
+          }
+        }
+      },
+      {
+        "match": {
+          "overrideScope": "aaa"
+        },
+        "modelConfig": {
+          "model": "gemini-3.1-flash-lite",
+          "generateContentConfig": {
+            "temperature": 2,
+            "topP": 1,
+            "topK": 40,
+            "thinkingConfig": {
+              "includeThoughts": true
+            }
           }
         }
       },
@@ -254,11 +298,13 @@
     ]
   },
   "policyPaths": [
-    "/workspace/.gemini/policies",
+    "/etc/gemini-cli/policies",
+    "/root/.gemini/policies",
     "/app/applet/.gemini/policies"
   ],
   "adminPolicyPaths": [
-    "/workspace/.gemini/policies",
+    "/etc/gemini-cli/policies",
+    "/root/.gemini/policies",
     "/app/applet/.gemini/policies"
   ]
 }
