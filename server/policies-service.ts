@@ -17,7 +17,7 @@ export const DEFAULT_DENY_GOOGLE_SEARCH_TOML = `# User Policy: Global Denial of 
 
 [[rule]]
 name = "Deny Google Web Search"
-toolName = ["google_web_search", "web_search"]
+toolName = "google_web_search"
 decision = "deny"
 priority = 999
 denyMessage = "google_web_search está desativado globalmente pela Política de Segurança. Utilize a ferramenta web_search_exa do MCP Exa."
@@ -38,15 +38,7 @@ export function ensureDefaultUserPolicies(): void {
       }
 
       const policyPath = path.join(dir, 'deny-google-search.toml');
-      if (!fs.existsSync(policyPath)) {
-        fs.writeFileSync(policyPath, DEFAULT_DENY_GOOGLE_SEARCH_TOML, 'utf8');
-      } else {
-        const content = fs.readFileSync(policyPath, 'utf8');
-        if (content.includes('priority = 1000') || content.includes('priority=1000')) {
-          const updated = content.replace(/priority\s*=\s*1000/g, 'priority = 999');
-          fs.writeFileSync(policyPath, updated, 'utf8');
-        }
-      }
+      fs.writeFileSync(policyPath, DEFAULT_DENY_GOOGLE_SEARCH_TOML, 'utf8');
     } catch (err) {
       // ignore write errors for restricted directories
     }

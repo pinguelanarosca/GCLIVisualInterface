@@ -1,6 +1,10 @@
+# User Policy: Global Denial of Google Web Search
+# Enforces Policy Engine restriction on google_web_search and routes search requests to Exa (web_search_exa)
+
 [[rule]]
 name = "Deny Google Web Search"
-toolName = ["google_web_search", "web_search"]
+toolName = "google_web_search"
 decision = "deny"
 priority = 999
 denyMessage = "google_web_search está desativado globalmente pela Política de Segurança. Utilize a ferramenta web_search_exa do MCP Exa."
+modes = ["default", "autoEdit", "yolo", "plan"]

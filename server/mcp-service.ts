@@ -66,7 +66,6 @@ export function loadMcpSettings(targetDir?: string): McpConfig[] {
   if (!mcpServers.exa || !mcpServers.exa.trust || !mcpServers.exa.headers) {
     mcpServers.exa = {
       url: INITIAL_EXA_MCP.url,
-      httpUrl: INITIAL_EXA_MCP.httpUrl,
       type: INITIAL_EXA_MCP.type,
       trust: INITIAL_EXA_MCP.trust,
       headers: INITIAL_EXA_MCP.headers,
