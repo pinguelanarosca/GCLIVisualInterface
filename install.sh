@@ -85,7 +85,7 @@ npm install --no-audit --no-fund
 npm run build
 
 echo "[6/6] Preparando executáveis, atalhos do sistema e permissões..."
-mkdir -p /usr/local/bin /usr/bin /usr/share/applications /etc/gemini-cli/policies
+mkdir -p /usr/local/bin /usr/bin /usr/share/applications
 
 cat << 'EOF' > /usr/local/bin/gemini-gui
 #!/usr/bin/env bash

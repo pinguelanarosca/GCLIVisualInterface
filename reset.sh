@@ -29,12 +29,7 @@ done
 # 2. Remover diretório local da workspace .gemini/
 rm -rf .gemini/
 
-# 3. Remover políticas de sistema criadas pela aplicação
-if [ -f "/etc/gemini-cli/policies/deny-google-search.toml" ]; then
-    rm -f "/etc/gemini-cli/policies/deny-google-search.toml"
-fi
-
-# 5. Remover arquivos temporários de log e empacotamento
+# 3. Remover arquivos temporários de log e empacotamento
 rm -f cli-debug.log
 rm -f /tmp/gemini-gui-*.log
 rm -f /tmp/gemini-client-error-*.json

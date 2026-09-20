@@ -57,14 +57,11 @@ Os seguintes caminhos e artefatos são de propriedade e uso exclusivo da aplica�
   * `/opt/gemini-gui` (Diretório principal de instalação do aplicativo)
   * `/usr/local/bin/gemini-gui` e `/usr/bin/gemini-gui` (Executáveis / Atalhos CLI)
   * `/usr/share/applications/gemini-gui.desktop` (Atalho do menu de aplicativos do Ubuntu/Linux)
-  * `/etc/gemini-cli/policies/deny-google-search.toml` (Política de segurança do sistema)
 
-* **Armazenamento e Estado do Usuário (`~/.gemini/`)**:
-  * `~/.gemini/history/` (Histórico de sessões do Gemini CLI)
-  * `~/.gemini/agents/` (Definições markdown de agentes customizados)
-  * `~/.gemini/projects.json` e `~/.gemini/projects.json.lock` (Índices de projetos do CLI)
-  * `~/.gemini/policies/deny-google-search.toml` e `~/.gemini/settings.json` (Políticas e configurações)
-  * `~/.gemini/tmp/` (Arquivos temporários e anexos de sessão)
+* **Armazenamento e Estado do Usuário Exclusivos da GUI (`~/.local/share/gemini-gui/`)**:
+  * `~/.local/share/gemini-gui/.gemini/policies/` (Políticas exclusivas da interface GUI, como o `deny-google-search.toml`)
+  * `~/.local/share/gemini-gui/.gemini/settings.json` (Configurações internas de políticas e modelos da interface GUI)
+  * `~/.local/share/gemini-gui/logs/gui.log` (Arquivo de logs de execução do servidor em segundo plano)
 
 * **Workspace Local e Cache**:
   * `.gemini-gui-storage.json` (Banco de dados de persistência local da interface GUI)

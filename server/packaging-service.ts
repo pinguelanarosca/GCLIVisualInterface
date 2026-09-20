@@ -267,7 +267,7 @@ npm install --no-audit --no-fund
 npm run build
 
 echo "[6/6] Preparando executáveis, atalhos do sistema e permissões..."
-mkdir -p /usr/local/bin /usr/bin /usr/share/applications /etc/gemini-cli/policies
+mkdir -p /usr/local/bin /usr/bin /usr/share/applications
 
 cat << 'EOF' > /usr/local/bin/gemini-gui
 #!/usr/bin/env bash
@@ -389,19 +389,14 @@ echo "Verificando e encerrando instâncias ativas do gemini-gui..."
 pkill -f "dist/server.cjs" || true
 pkill -f "gemini-gui" || true
 
-echo "[1/4] Removendo binários, executáveis e atalhos do sistema..."
+echo "[1/3] Removendo binários, executáveis e atalhos do sistema..."
 remove_target "/opt/gemini-gui"
 remove_target "/usr/local/bin/gemini-gui"
 remove_target "/usr/bin/gemini-gui"
 remove_target "/usr/share/applications/gemini-gui.desktop"
 update-desktop-database 2>/dev/null || true
 
-echo "[2/4] Removendo políticas de segurança de sistema criadas pela aplicação..."
-remove_target "/etc/gemini-cli/policies/deny-google-search.toml"
-rmdir /etc/gemini-cli/policies 2>/dev/null || true
-rmdir /etc/gemini-cli 2>/dev/null || true
-
-echo "[3/4] Removendo dados e configurações exclusivos da GUI..."
+echo "[2/3] Removendo dados e configurações exclusivos da GUI..."
 TARGET_USER_HOME="\${HOME:-/root}"
 USER_HOMES=("$TARGET_USER_HOME")
 
@@ -423,7 +418,7 @@ remove_target ".gemini-gui-storage.json"
 remove_target ".gemini"
 remove_target "dist-ubuntu"
 
-echo "[4/4] Removendo logs temporários..."
+echo "[3/3] Removendo logs temporários..."
 remove_target "cli-debug.log"
 for f in /tmp/gemini-gui-*.log /tmp/gemini-client-error-*.json; do
     if [ -f "$f" ]; then
