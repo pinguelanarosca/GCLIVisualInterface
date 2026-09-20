@@ -1,10 +1,10 @@
 ---
-kind: local
 name: tester
-display_name: "Tester"
-description: "Desenvolvimento e execução de suítes de testes, validação de comportamentos e análise de falhas."
 model: gemini-3-flash
+description: "Desenvolvimento e execução de suítes de testes, validação de comportamentos e análise de falhas."
+kind: local
 tools: ["*"]
+backup_agent: worker
 temperature: 0.2
 max_turns: 25
 ---

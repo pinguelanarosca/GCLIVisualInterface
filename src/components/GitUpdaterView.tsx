@@ -67,18 +67,33 @@ export const GitUpdaterView: React.FC<GitUpdaterViewProps> = ({ onRefreshGlobalS
 
   const pollIntervalRef = useRef<any>(null);
 
+  const safeJson = async (res: Response): Promise<any> => {
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return {
+        success: res.ok,
+        message: text.startsWith('<') ? 'O servidor retornou uma página ou resposta HTML (possível reinício de serviço ou timeout).' : text,
+        logs: [text],
+      };
+    }
+  };
+
   const loadStatus = async () => {
     setIsLoadingStatus(true);
     try {
       const res = await fetch(`/api/git/status?repoUrl=${encodeURIComponent(repoUrl)}`);
       if (res.ok) {
-        const data = await res.json();
-        setGitStatus(data);
-        if (data.remoteUrl && !repoUrl) {
-          setRepoUrl(data.remoteUrl);
-        }
-        if (data.branch && !branch) {
-          setBranch(data.branch);
+        const data = await safeJson(res);
+        if (data && typeof data === 'object' && !data.error) {
+          setGitStatus(data);
+          if (data.remoteUrl && !repoUrl) {
+            setRepoUrl(data.remoteUrl);
+          }
+          if (data.branch && !branch) {
+            setBranch(data.branch);
+          }
         }
       }
     } catch (err) {
@@ -137,7 +152,7 @@ export const GitUpdaterView: React.FC<GitUpdaterViewProps> = ({ onRefreshGlobalS
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repoUrl: repoUrl.trim(), branch: branch.trim() }),
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       setUpdateCheckResult(data);
     } catch (err: any) {
       setUpdateCheckResult({
@@ -169,22 +184,18 @@ export const GitUpdaterView: React.FC<GitUpdaterViewProps> = ({ onRefreshGlobalS
           restartServer: autoRestart,
         }),
       });
-      const contentType = res.headers.get('content-type');
-      if (res.ok && contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        setUpdateResult(data);
+      const data = await safeJson(res);
+      setUpdateResult(data);
 
-        if (data.success) {
-          await loadStatus();
-          if (onRefreshGlobalStatus) {
-            onRefreshGlobalStatus();
-          }
-          if (data.restarting || autoRestart) {
-            startHealthPolling(4);
-          }
+      if (data.success) {
+        await loadStatus();
+        if (onRefreshGlobalStatus) {
+          onRefreshGlobalStatus();
+        }
+        if (data.restarting || autoRestart) {
+          startHealthPolling(4);
         }
       } else {
-        // If the server restarted during the request, it might return 502/503 HTML
         const isRebooting = autoRestart || runBuild;
         if (isRebooting && !res.ok) {
           setUpdateResult({
@@ -193,12 +204,6 @@ export const GitUpdaterView: React.FC<GitUpdaterViewProps> = ({ onRefreshGlobalS
             logs: [`Processo de atualização finalizado. Reinicialização iniciada...`],
           });
           startHealthPolling(4);
-        } else {
-          setUpdateResult({
-            success: false,
-            message: `Erro HTTP ${res.status}. Tente novamente.`,
-            logs: [`O servidor retornou um status inesperado: ${res.status}`],
-          });
         }
       }
     } catch (err: any) {
@@ -221,7 +226,7 @@ export const GitUpdaterView: React.FC<GitUpdaterViewProps> = ({ onRefreshGlobalS
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       setRebuildResult(data);
     } catch (err: any) {
       setRebuildResult({

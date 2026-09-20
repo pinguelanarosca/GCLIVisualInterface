@@ -1,10 +1,10 @@
 ---
-kind: local
 name: auditor
-display_name: "Auditor"
-description: "Revisão crítica rigorosa de código, auditoria de segurança, detecção de regressões e vulnerabilidades."
 model: gemini-3.8-flash
+description: "Revisão crítica rigorosa de código, auditoria de segurança, detecção de regressões e vulnerabilidades."
+kind: local
 tools: ["*"]
+backup_agent: architect
 temperature: 0.1
 max_turns: 20
 ---

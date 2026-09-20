@@ -1,10 +1,10 @@
 ---
-kind: local
 name: worker
-display_name: "Worker"
-description: "Execução de tarefas repetitivas, geração de boilerplate, transformações em massa e refatorações diretas."
 model: gemini-3.1-flash-lite
+description: "Execução de tarefas repetitivas, geração de boilerplate, transformações em massa e refatorações diretas."
+kind: local
 tools: ["*"]
+backup_agent: principal
 temperature: 0.2
 max_turns: 30
 ---

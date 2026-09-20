@@ -246,7 +246,26 @@ priority = 90
 
   // 2. Real Execution via Server-Sent Events (SSE)
   app.post('/api/cli/execute', (req, res) => {
-    const { prompt, model, approvalMode, authorizedDirs, sessionId, resume, workDir, agentId } = req.body;
+    const {
+      prompt,
+      model,
+      approvalMode,
+      authorizedDirs,
+      sessionId,
+      resume,
+      workDir,
+      agentId,
+      backupAgentId,
+      isBackupExecution,
+      temperature,
+      topP,
+      topK,
+      maxOutputTokens,
+      thinking,
+      systemInstructions,
+      overrideBasePrompt,
+      baseInstructions,
+    } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt é obrigatório.' });
@@ -273,6 +292,16 @@ priority = 90
       resume: Boolean(resume),
       workDir,
       agentId,
+      backupAgentId,
+      isBackupExecution: Boolean(isBackupExecution),
+      temperature,
+      topP,
+      topK,
+      maxOutputTokens,
+      thinking,
+      systemInstructions,
+      overrideBasePrompt,
+      baseInstructions,
       onEvent: (evt) => {
         const payload =
           typeof evt.data === 'object' && evt.data !== null
@@ -561,43 +590,87 @@ priority = 90
 
   // 13. Git Application Updater & System Lifecycle
   app.get('/api/git/status', (req, res) => {
-    const { repoUrl } = req.query;
-    const status = getGitStatus(repoUrl as string);
-    res.json(status);
+    try {
+      const { repoUrl } = req.query;
+      const status = getGitStatus(repoUrl as string);
+      res.json(status);
+    } catch (err: any) {
+      res.status(500).json({
+        isGitRepo: false,
+        repoUrl: (req.query.repoUrl as string) || DEFAULT_GIT_REPO_URL,
+        branch: DEFAULT_GIT_BRANCH,
+        hasUncommittedChanges: false,
+        uncommittedFilesCount: 0,
+        gitAvailable: false,
+        error: err.message,
+      });
+    }
   });
 
   app.post('/api/git/check-update', async (req, res) => {
-    const { repoUrl, branch } = req.body || {};
-    const result = await checkRemoteGitUpdates(repoUrl || DEFAULT_GIT_REPO_URL, branch || DEFAULT_GIT_BRANCH);
-    res.json(result);
+    try {
+      const { repoUrl, branch } = req.body || {};
+      const result = await checkRemoteGitUpdates(repoUrl || DEFAULT_GIT_REPO_URL, branch || DEFAULT_GIT_BRANCH);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({
+        hasUpdate: false,
+        branch: req.body?.branch || DEFAULT_GIT_BRANCH,
+        message: `Falha ao checar atualizações: ${err.message}`,
+        error: err.message,
+      });
+    }
   });
 
   app.post('/api/git/pull-update', (req, res) => {
-    const { repoUrl, branch, forceSync, installDependencies, runBuild, restartServer } = req.body || {};
-    const result = performGitUpdate({
-      repoUrl: repoUrl || DEFAULT_GIT_REPO_URL,
-      branch: branch || DEFAULT_GIT_BRANCH,
-      forceSync: Boolean(forceSync),
-      installDependencies: installDependencies !== false,
-      runBuild: runBuild !== false,
-      restartServer: Boolean(restartServer),
-    });
-    res.json(result);
+    try {
+      const { repoUrl, branch, forceSync, installDependencies, runBuild, restartServer } = req.body || {};
+      const result = performGitUpdate({
+        repoUrl: repoUrl || DEFAULT_GIT_REPO_URL,
+        branch: branch || DEFAULT_GIT_BRANCH,
+        forceSync: Boolean(forceSync),
+        installDependencies: installDependencies !== false,
+        runBuild: runBuild !== false,
+        restartServer: Boolean(restartServer),
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        message: `Erro interno no servidor ao aplicar atualização: ${err.message}`,
+        logs: [`❌ Falha no endpoint /api/git/pull-update: ${err.message}`],
+      });
+    }
   });
 
   app.post('/api/system/rebuild', (req, res) => {
-    const result = performRebuild();
-    res.json(result);
+    try {
+      const result = performRebuild();
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        message: `Falha ao reconstruir: ${err.message}`,
+        logs: [`❌ Erro no build: ${err.message}`],
+      });
+    }
   });
 
   app.post('/api/system/restart', (req, res) => {
-    const delayMs = typeof req.body?.delayMs === 'number' ? req.body.delayMs : 1500;
-    scheduleServerRestart(delayMs);
-    res.json({
-      success: true,
-      message: `Reinício do servidor programado para execução em ${delayMs}ms.`,
-      delayMs,
-    });
+    try {
+      const delayMs = typeof req.body?.delayMs === 'number' ? req.body.delayMs : 1500;
+      scheduleServerRestart(delayMs);
+      res.json({
+        success: true,
+        message: `Reinício do servidor programado para execução em ${delayMs}ms.`,
+        delayMs,
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        message: `Falha ao reiniciar servidor: ${err.message}`,
+      });
+    }
   });
 
   app.get('/api/git/manual-commands', (req, res) => {

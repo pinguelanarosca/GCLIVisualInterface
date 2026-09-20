@@ -10,6 +10,10 @@ import {
   Info,
   RotateCcw,
   CheckCircle2,
+  ShieldCheck,
+  ShieldAlert,
+  ArrowRight,
+  Zap,
 } from 'lucide-react';
 import { MODELS_CATALOG } from '../constants/modelsCatalog.js';
 import { AgentConfig } from '../types.js';
@@ -17,16 +21,82 @@ import { AgentConfig } from '../types.js';
 interface ModelCatalogViewProps {
   agents: AgentConfig[];
   onResetDefaultAgentsConfig: () => Promise<void>;
+  onSaveAgent?: (agent: AgentConfig) => Promise<void>;
   isResetting?: boolean;
 }
 
 export const ModelCatalogView: React.FC<ModelCatalogViewProps> = ({
   agents,
   onResetDefaultAgentsConfig,
+  onSaveAgent,
   isResetting = false,
 }) => {
   const [activeCategoryTab, setActiveCategoryTab] = useState<string>('all');
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [savedAgentId, setSavedAgentId] = useState<string | null>(null);
+
+  const defaultAgentPairs = [
+    {
+      role: 'Principal / Orchestrator',
+      id: 'principal',
+      primaryModel: 'gemini-3.5-flash-lite',
+      quota: 'RPM 1/1521 | RPD 1/500',
+      defaultBackupId: 'worker',
+      backupRationale: 'Worker possui 150 RPM / 500 RPD para manter a coordenação contínua.',
+    },
+    {
+      role: 'Investigator',
+      id: 'investigator',
+      primaryModel: 'gemini-3.7-flash',
+      quota: 'RPM 0/50 | RPD 0/20',
+      defaultBackupId: 'architect',
+      backupRationale: 'Architect (3.6 Flash) tem alta capacidade de análise estrutural.',
+    },
+    {
+      role: 'Architect',
+      id: 'architect',
+      primaryModel: 'gemini-3.6-flash',
+      quota: 'RPM 0/50 | RPD 0/20',
+      defaultBackupId: 'investigator',
+      backupRationale: 'Investigator (3.7 Flash) assume decisões e diagnóstico arquitetural.',
+    },
+    {
+      role: 'Auditor',
+      id: 'auditor',
+      primaryModel: 'gemini-3.8-flash',
+      quota: 'RPM 0/50 | RPD 0/20',
+      defaultBackupId: 'architect',
+      backupRationale: 'Architect (3.6 Flash) assegura revisão crítica caso a cota do 3.8 atinja o limite.',
+    },
+    {
+      role: 'Tester',
+      id: 'tester',
+      primaryModel: 'gemini-3-flash',
+      quota: 'RPM 0/50 | RPD 0/20',
+      defaultBackupId: 'worker',
+      backupRationale: 'Worker (3.1 Flash-Lite) executa suítes e validações sem consumir cotas restritas.',
+    },
+    {
+      role: 'Worker',
+      id: 'worker',
+      primaryModel: 'gemini-3.1-flash-lite',
+      quota: 'RPM 0/150 | RPD 0/500',
+      defaultBackupId: 'principal',
+      backupRationale: 'Principal (3.5 Flash-Lite) reabsorve lotes de trabalho se o Worker sobrecarregar.',
+    },
+  ];
+
+  const handleBackupChange = async (agentId: string, newBackupId: string) => {
+    const targetAgent = agents.find((a) => a.id.toLowerCase() === agentId.toLowerCase());
+    if (targetAgent && onSaveAgent) {
+      await onSaveAgent({
+        ...targetAgent,
+        backupAgentId: newBackupId,
+      });
+      setSavedAgentId(agentId);
+      setTimeout(() => setSavedAgentId(null), 2500);
+    }
+  };
 
   const sections = [
     {
@@ -85,17 +155,17 @@ export const ModelCatalogView: React.FC<ModelCatalogViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner: Initial Standard Configuration */}
-      <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 space-y-3">
-        <div className="flex items-start justify-between gap-4">
+      <div className="p-4 sm:p-5 rounded-2xl border border-blue-200 dark:border-blue-900/60 bg-gradient-to-b from-blue-50/70 to-blue-50/20 dark:from-blue-950/30 dark:to-blue-950/10 space-y-4 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
               <h4 className="text-xs font-bold uppercase tracking-wider text-blue-900 dark:text-blue-200">
-                Configuração Padrão dos 6 Agentes Especializados
+                Configuração Padrão dos 6 Agentes com Agente Reserva Automático
               </h4>
             </div>
-            <p className="text-xs text-blue-800/80 dark:text-blue-300/80 mt-1">
-              Mapeamento inicial otimizado por cotas (RPM / TPM / RPD) e especialidade técnica:
+            <p className="text-xs text-blue-800/80 dark:text-blue-300/80 mt-1 max-w-2xl leading-relaxed">
+              Cada um dos 6 agentes especializados possui um <strong>Agente Reserva</strong> associado. Caso a API retorne erros de <strong>servidor sobrecarregado (500/503)</strong> ou <strong>cotas atingidas (429)</strong>, o agente reserva é acionado automaticamente em tempo de execução sem interrupção.
             </p>
           </div>
 
@@ -103,59 +173,100 @@ export const ModelCatalogView: React.FC<ModelCatalogViewProps> = ({
             type="button"
             onClick={handleReset}
             disabled={isResetting}
-            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-xs disabled:opacity-50"
+            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-2 transition shrink-0 cursor-pointer shadow-md shadow-blue-600/20 disabled:opacity-50"
           >
             <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
-            <span>{isResetting ? 'Aplicando...' : 'Aplicar Configuração Padrão'}</span>
+            <span>{isResetting ? 'Restaurando...' : 'Aplicar Configuração Padrão'}</span>
           </button>
         </div>
 
         {resetSuccess && (
-          <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2">
+          <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2 animate-fadeIn">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <span>Configuração padrão aplicada com sucesso aos 6 agentes (.gemini/agents/*.md)!</span>
+            <span>Configuração padrão e agentes reservas redefinidos com sucesso para todos os 6 agentes (.gemini/agents/*.md)!</span>
           </div>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-          {[
-            { role: 'Principal / Orchestrator', id: 'principal', quota: 'RPM 1/1521 | RPD 1/500' },
-            { role: 'Investigator', id: 'investigator', quota: 'RPM 0/50 | RPD 0/20' },
-            { role: 'Architect', id: 'architect', quota: 'RPM 0/50 | RPD 0/20' },
-            { role: 'Auditor', id: 'auditor', quota: 'RPM 0/50 | RPD 0/20' },
-            { role: 'Tester', id: 'tester', quota: 'RPM 0/50 | RPD 0/20' },
-            { role: 'Worker', id: 'worker', quota: 'RPM 0/150 | RPD 0/500' },
-          ].map((item) => {
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+          {defaultAgentPairs.map((item) => {
             const currentAgent = agents.find(
-              (a) => a.id.toLowerCase() === item.id.toLowerCase()
+              (a) => a.id.toLowerCase() === item.id.toLowerCase() || a.name.toLowerCase() === item.id.toLowerCase()
             );
+            const activeBackupId = currentAgent?.backupAgentId || item.defaultBackupId;
+            const backupAgent = agents.find(
+              (a) => a.id.toLowerCase() === activeBackupId.toLowerCase() || a.name.toLowerCase() === activeBackupId.toLowerCase()
+            );
+
             return (
               <div
                 key={item.role}
-                className="p-2.5 rounded-lg bg-white dark:bg-zinc-800/80 border border-blue-100 dark:border-zinc-700 text-xs shadow-2xs flex flex-col justify-between"
+                className="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between space-y-3 relative group"
               >
-                <div>
-                  <div className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center justify-between">
-                    <span>{item.role}</span>
+                {savedAgentId === item.id && (
+                  <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold flex items-center gap-1 shadow-xs">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Salvo</span>
                   </div>
-                  <div className="mt-1.5">
+                )}
+
+                {/* Agente Titular */}
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-xs text-zinc-900 dark:text-zinc-100">{item.role}</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                      {item.id}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 flex items-center justify-between text-[11px]">
+                    <span className="text-zinc-500 dark:text-zinc-400">Modelo Titular:</span>
+                    <span className="font-mono font-semibold text-blue-600 dark:text-blue-400 text-[10px]">
+                      {currentAgent?.model || item.primaryModel}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-zinc-400 font-mono mt-0.5 text-right">{item.quota}</div>
+                </div>
+
+                {/* Bloco do Agente Reserva */}
+                <div className="p-2.5 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Agente Reserva</span>
+                    </div>
+                    <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-amber-200/60 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200">
+                      Auto-Fallback
+                    </span>
+                  </div>
+
+                  <div className="mt-1">
                     <select
-                      className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md py-1 px-1.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 outline-none"
-                      value={currentAgent?.id || ''}
-                      onChange={(e) => {
-                        // In a real scenario, this might update a mapping
-                        // For now, we show the selection
-                      }}
+                      className="w-full bg-white dark:bg-zinc-900 border border-amber-300 dark:border-amber-800/80 rounded-md py-1 px-1.5 text-[11px] font-medium text-zinc-800 dark:text-zinc-200 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                      value={activeBackupId}
+                      onChange={(e) => handleBackupChange(item.id, e.target.value)}
                     >
-                      {agents.map((ag) => (
-                        <option key={ag.id} value={ag.id}>
-                          {ag.displayName || ag.name} ({ag.model})
-                        </option>
-                      ))}
+                      {agents
+                        .filter((ag) => ag.id.toLowerCase() !== item.id.toLowerCase())
+                        .map((ag) => (
+                          <option key={ag.id} value={ag.id}>
+                            {ag.displayName || ag.name} ({ag.model})
+                          </option>
+                        ))}
                     </select>
                   </div>
+
+                  <div className="flex items-center justify-between text-[9px] text-amber-900/70 dark:text-amber-300/70 pt-0.5">
+                    <span>Cota Reserva:</span>
+                    <span className="font-mono font-medium">
+                      {backupAgent?.model.includes('lite') ? 'RPM 150-1521 | RPD 500' : 'RPM 50 | RPD 20'}
+                    </span>
+                  </div>
+
+                  <div className="text-[9px] text-zinc-500 dark:text-zinc-400 flex items-center gap-1 pt-0.5 leading-tight">
+                    <Zap className="w-2.5 h-2.5 text-amber-500 shrink-0" />
+                    <span>Acionado se erro 429 (Cota) ou 500/503 (Sobrecarga)</span>
+                  </div>
                 </div>
-                <div className="text-[10px] text-zinc-400 font-mono mt-2">{item.quota}</div>
               </div>
             );
           })}

@@ -308,7 +308,16 @@ export function App() {
           sessionId: currentSessionId,
           resume: messages.length > 0,
           workDir,
-          agentId: currentAgent?.id,
+          agentId: currentAgent?.id || currentAgent?.name,
+          backupAgentId: currentAgent?.backupAgentId,
+          temperature: currentAgent?.temperature,
+          topP: currentAgent?.topP,
+          topK: currentAgent?.topK,
+          maxOutputTokens: currentAgent?.maxOutputTokens,
+          thinking: currentAgent?.thinking,
+          systemInstructions: currentAgent?.systemInstructions,
+          overrideBasePrompt: currentAgent?.overrideBasePrompt,
+          baseInstructions: currentAgent?.baseInstructions,
         }),
       });
 

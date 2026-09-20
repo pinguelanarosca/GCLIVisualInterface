@@ -1,10 +1,10 @@
 ---
-kind: local
 name: principal
-display_name: "Principal / Orchestrator"
-description: "Coordenação geral, decomposição de tarefas complexas, roteamento e consolidação dos resultados."
 model: gemini-3.5-flash-lite
+description: "Coordenação geral, decomposição de tarefas complexas, roteamento e consolidação dos resultados."
+kind: local
 tools: ["*"]
+backup_agent: worker
 temperature: 0.2
 max_turns: 30
 ---

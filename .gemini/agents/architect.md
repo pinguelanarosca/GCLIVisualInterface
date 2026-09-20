@@ -1,10 +1,10 @@
 ---
-kind: local
 name: architect
-display_name: "Architect"
-description: "Decisões de design de sistemas, modularidade, separação de responsabilidades e integridade estrutural."
 model: gemini-3.6-flash
+description: "Decisões de design de sistemas, modularidade, separação de responsabilidades e integridade estrutural."
+kind: local
 tools: ["*"]
+backup_agent: investigator
 temperature: 0.2
 max_turns: 20
 ---

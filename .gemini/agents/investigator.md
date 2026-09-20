@@ -1,10 +1,10 @@
 ---
-kind: local
 name: investigator
-display_name: "Investigator"
-description: "Investigação profunda de código, pesquisa em fontes, rastreamento de bugs e diagnóstico com evidências."
 model: gemini-3.7-flash
+description: "Investigação profunda de código, pesquisa em fontes, rastreamento de bugs e diagnóstico com evidências."
+kind: local
 tools: ["*"]
+backup_agent: architect
 temperature: 0.1
 max_turns: 25
 ---

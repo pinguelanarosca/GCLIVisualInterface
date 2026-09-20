@@ -11,6 +11,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     displayName: 'Principal / Orchestrator',
     role: 'Principal/Orchestrator: coordenação, roteamento e consolidação.',
     model: 'gemini-3.5-flash-lite',
+    backupAgentId: 'worker',
     description: 'Coordenação geral, decomposição de tarefas complexas, roteamento e consolidação dos resultados.',
     baseInstructions: `Você é o Principal Orchestrator do Gemini CLI.
 Sua função primária:
@@ -32,6 +33,7 @@ Sua função primária:
     displayName: 'Investigator',
     role: 'Investigator: investigação, pesquisa e diagnóstico.',
     model: 'gemini-3.7-flash',
+    backupAgentId: 'architect',
     description: 'Investigação profunda de código, pesquisa em fontes, rastreamento de bugs e diagnóstico com evidências.',
     baseInstructions: `Você é o Investigator do Gemini CLI.
 Sua função primária:
@@ -53,6 +55,7 @@ Sua função primária:
     displayName: 'Architect',
     role: 'Architect: decisões arquiteturais e estruturais.',
     model: 'gemini-3.6-flash',
+    backupAgentId: 'investigator',
     description: 'Decisões de design de sistemas, modularidade, separação de responsabilidades e integridade estrutural.',
     baseInstructions: `Você é o Architect do Gemini CLI.
 Sua função primária:
@@ -74,6 +77,7 @@ Sua função primária:
     displayName: 'Auditor',
     role: 'Auditor: revisão crítica e identificação de problemas.',
     model: 'gemini-3.8-flash',
+    backupAgentId: 'architect',
     description: 'Revisão crítica rigorosa de código, auditoria de segurança, detecção de regressões e vulnerabilidades.',
     baseInstructions: `Você é o Auditor do Gemini CLI.
 Sua função primária:
@@ -95,6 +99,7 @@ Sua função primária:
     displayName: 'Tester',
     role: 'Tester: testes e validação.',
     model: 'gemini-3-flash',
+    backupAgentId: 'worker',
     description: 'Desenvolvimento e execução de suítes de testes, validação de comportamentos e análise de falhas.',
     baseInstructions: `Você é o Tester do Gemini CLI.
 Sua função primária:
@@ -116,6 +121,7 @@ Sua função primária:
     displayName: 'Worker',
     role: 'Worker: tarefas repetitivas e de alto volume.',
     model: 'gemini-3.1-flash-lite',
+    backupAgentId: 'principal',
     description: 'Execução de tarefas repetitivas, geração de boilerplate, transformações em massa e refatorações diretas.',
     baseInstructions: `Você é o Worker do Gemini CLI.
 Sua função primária:
@@ -248,23 +254,46 @@ export function saveAgentToFile(agent: AgentConfig, targetDir?: string) {
     ? agent.systemInstructions
     : (agent.baseInstructions ? `${agent.baseInstructions}\n\n${agent.systemInstructions}` : agent.systemInstructions);
 
-  // Schema oficial do Gemini CLI: name, model, description, tools
+  // Schema do Gemini CLI: name, model, description, tools, temperature, max_turns, etc.
   const fmLines = [
     '---',
     `name: ${agent.name}`,
     `model: ${agent.model}`,
     `description: "${agent.description.replace(/"/g, '\\"')}"`,
+    `kind: ${agent.kind || 'local'}`,
     `tools: ${JSON.stringify(agent.tools || ['*'])}`,
-    '---',
   ];
 
+  if (agent.backupAgentId) {
+    fmLines.push(`backup_agent: ${agent.backupAgentId}`);
+  }
+  if (typeof agent.temperature === 'number') {
+    fmLines.push(`temperature: ${agent.temperature}`);
+  }
+  if (typeof agent.maxTurns === 'number') {
+    fmLines.push(`max_turns: ${agent.maxTurns}`);
+  }
+  if (typeof agent.topP === 'number') {
+    fmLines.push(`top_p: ${agent.topP}`);
+  }
+  if (typeof agent.topK === 'number') {
+    fmLines.push(`top_k: ${agent.topK}`);
+  }
+  if (typeof agent.maxOutputTokens === 'number') {
+    fmLines.push(`max_output_tokens: ${agent.maxOutputTokens}`);
+  }
+  if (typeof agent.thinking === 'boolean') {
+    fmLines.push(`thinking: ${agent.thinking}`);
+  }
+
+  fmLines.push('---');
   fmLines.push('');
   fmLines.push(effectivePrompt.trim());
 
   const filePath = path.join(agentsDir, `${agent.name}.md`);
   fs.writeFileSync(filePath, fmLines.join('\n'), 'utf8');
 
-  // Salvar metadados de UI separadamente para não quebrar o CLI
+  // Salvar metadados de UI
   const metadata = loadMetadata(targetDir);
   metadata[agent.name] = {
     displayName: agent.displayName,
@@ -279,50 +308,31 @@ export function saveAgentToFile(agent: AgentConfig, targetDir?: string) {
     conceptualProfile: agent.conceptualProfile,
     maxTurns: agent.maxTurns,
     kind: agent.kind,
+    backupAgentId: agent.backupAgentId,
   };
   saveMetadata(metadata, targetDir);
 
-  // Atualizar dinamicamente o settings.json do Gemini CLI para propagar configurações do agente via overrideScope
-  try {
-    const settingsPath = path.join(process.cwd(), '.gemini', 'settings.json');
-    let settings: any = { mcpServers: {}, modelConfigs: { overrides: [] } };
-    if (fs.existsSync(settingsPath)) {
-      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    }
-
-    if (!settings.modelConfigs) settings.modelConfigs = { overrides: [] };
-    if (!settings.modelConfigs.overrides) settings.modelConfigs.overrides = [];
-
-    // Remover override existente para este agente para não duplicar
-    settings.modelConfigs.overrides = settings.modelConfigs.overrides.filter(
-      (o: any) => o.match?.overrideScope !== agent.name
-    );
-
-    settings.modelConfigs.overrides.push({
-      match: { overrideScope: agent.name },
-      modelConfig: {
-        generateContentConfig: {
-          temperature: agent.temperature,
-          topP: agent.topP,
-          topK: agent.topK,
-          thinkingConfig: agent.thinking ? { includeThoughts: true } : undefined,
-        },
-      },
-    });
-
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
-  } catch (err) {
-    sysLog.error('AGENT', `Erro ao atualizar settings.json: ${err}`);
-  }
+  // Sincronizar configurações do modelo no settings.json do Gemini CLI
+  syncAgentsToSettings(targetDir, agent.name, agent);
 }
 
 export function deleteAgent(name: string, targetDir?: string): boolean {
   const filePath = path.join(getAgentsDirectory(targetDir), `${name}.md`);
+  let removed = false;
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
-    return true;
+    removed = true;
   }
-  return false;
+  const metadata = loadMetadata(targetDir);
+  if (metadata[name]) {
+    delete metadata[name];
+    saveMetadata(metadata, targetDir);
+    removed = true;
+  }
+  if (removed) {
+    syncAgentsToSettings(targetDir);
+  }
+  return removed;
 }
 
 function parseAgentMarkdown(content: string, fallbackName: string, metadata: any = {}): AgentConfig | null {
@@ -363,6 +373,7 @@ function parseAgentMarkdown(content: string, fallbackName: string, metadata: any
     displayName: metadata.displayName || fields['display_name'] || name,
     role: `${metadata.displayName || fields['display_name'] || name}: ${fields['description'] || ''}`,
     model: fields['model'] || 'gemini-3.5-flash-lite',
+    backupAgentId: metadata.backupAgentId || fields['backup_agent'] || fields['backup_agent_id'] || undefined,
     description: fields['description'] || '',
     baseInstructions: metadata.baseInstructions || '',
     systemInstructions: metadata.systemInstructions || body,
@@ -392,37 +403,180 @@ export function resetAllAgentsToDefault(targetDir?: string): AgentConfig[] {
   return loadAgents(targetDir);
 }
 
-export function syncAgentsToSettings() {
+export function syncAgentsToSettings(
+  targetDir?: string,
+  activeAgentName?: string,
+  activeConfig?: Partial<AgentConfig>
+) {
   try {
-    const metadata = loadMetadata();
-    const settingsPath = path.join(process.cwd(), '.gemini', 'settings.json');
-    let settings: any = { mcpServers: {}, modelConfigs: { overrides: [] } };
+    const base = targetDir || process.cwd();
+    const settingsPath = path.join(base, '.gemini', 'settings.json');
+    let settings: any = {};
     if (fs.existsSync(settingsPath)) {
-      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      try {
+        settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      } catch {
+        settings = {};
+      }
     }
 
-    if (!settings.modelConfigs) settings.modelConfigs = { overrides: [] };
+    if (!settings.mcpServers) settings.mcpServers = {};
+    if (!settings.modelConfigs) settings.modelConfigs = {};
+    if (!settings.modelConfigs.customAliases) settings.modelConfigs.customAliases = {};
     if (!settings.modelConfigs.overrides) settings.modelConfigs.overrides = [];
 
-    // Clear and rebuild overrides based on metadata
-    settings.modelConfigs.overrides = [];
+    // Carregar todos os agentes para compor as configurações
+    const allAgents = loadAgents(targetDir);
+    const metadata = loadMetadata(targetDir);
 
-    for (const [name, agent] of Object.entries(metadata)) {
-        const agentData = agent as any;
-        settings.modelConfigs.overrides.push({
-            match: { overrideScope: name },
-            modelConfig: {
-                generateContentConfig: {
-                    temperature: agentData.temperature,
-                    topP: agentData.topP,
-                    topK: agentData.topK,
-                    thinkingConfig: agentData.thinking ? { includeThoughts: true } : undefined,
-                },
-            },
+    // Mapear parâmetros por agente e por modelo
+    const agentConfigsByName = new Map<string, any>();
+    for (const ag of allAgents) {
+      agentConfigsByName.set(ag.name, ag);
+    }
+    for (const [name, meta] of Object.entries(metadata)) {
+      const existing = agentConfigsByName.get(name) || { name, model: 'gemini-3.5-flash-lite' };
+      agentConfigsByName.set(name, { ...existing, ...meta });
+    }
+
+    if (activeAgentName && activeConfig) {
+      const existing = agentConfigsByName.get(activeAgentName) || { name: activeAgentName, model: activeConfig.model || 'gemini-3.5-flash-lite' };
+      agentConfigsByName.set(activeAgentName, { ...existing, ...activeConfig });
+    }
+
+    const primaryAgentName = activeAgentName || 'principal';
+    const primaryAgent = agentConfigsByName.get(primaryAgentName) || agentConfigsByName.get('principal') || allAgents[0];
+
+    // Reconstruir customAliases e overrides
+    const newAliases: Record<string, any> = {};
+    const newOverrides: any[] = [];
+
+    const buildGenConfig = (cfg: any) => {
+      const genConfig: any = {};
+      if (typeof cfg.temperature === 'number') genConfig.temperature = cfg.temperature;
+      if (typeof cfg.topP === 'number') genConfig.topP = cfg.topP;
+      if (typeof cfg.topK === 'number') genConfig.topK = cfg.topK;
+      if (typeof cfg.maxOutputTokens === 'number') genConfig.maxOutputTokens = cfg.maxOutputTokens;
+      if (cfg.thinking) genConfig.thinkingConfig = { includeThoughts: true };
+      return genConfig;
+    };
+
+    // 1. Configuração do agente ativo / principal para o escopo core e modelo padrão
+    if (primaryAgent) {
+      const primaryGenConfig = buildGenConfig(primaryAgent);
+      const primaryModel = primaryAgent.model || 'gemini-3.5-flash-lite';
+
+      newAliases[primaryAgent.name] = {
+        modelConfig: {
+          model: primaryModel,
+          generateContentConfig: primaryGenConfig,
+        },
+      };
+      newAliases[primaryModel] = {
+        modelConfig: {
+          model: primaryModel,
+          generateContentConfig: primaryGenConfig,
+        },
+      };
+
+      // Match core
+      newOverrides.push({
+        match: { overrideScope: 'core' },
+        modelConfig: {
+          model: primaryModel,
+          generateContentConfig: primaryGenConfig,
+        },
+      });
+
+      // Match model
+      newOverrides.push({
+        match: { model: primaryModel },
+        modelConfig: {
+          model: primaryModel,
+          generateContentConfig: primaryGenConfig,
+        },
+      });
+
+      // Match model + core
+      newOverrides.push({
+        match: { model: primaryModel, overrideScope: 'core' },
+        modelConfig: {
+          model: primaryModel,
+          generateContentConfig: primaryGenConfig,
+        },
+      });
+    }
+
+    // 2. Configuração de todos os demais agentes
+    for (const [name, agentData] of agentConfigsByName.entries()) {
+      const genConfig = buildGenConfig(agentData);
+      const agentModel = agentData.model || 'gemini-3.5-flash-lite';
+
+      newAliases[name] = {
+        modelConfig: {
+          model: agentModel,
+          generateContentConfig: genConfig,
+        },
+      };
+
+      if (!newAliases[agentModel]) {
+        newAliases[agentModel] = {
+          modelConfig: {
+            model: agentModel,
+            generateContentConfig: genConfig,
+          },
+        };
+      }
+
+      newOverrides.push({
+        match: { overrideScope: name },
+        modelConfig: {
+          model: agentModel,
+          generateContentConfig: genConfig,
+        },
+      });
+
+      if (agentData.id && agentData.id !== name) {
+        newOverrides.push({
+          match: { overrideScope: agentData.id },
+          modelConfig: {
+            model: agentModel,
+            generateContentConfig: genConfig,
+          },
         });
+      }
+    }
+
+    settings.modelConfigs.customAliases = newAliases;
+    settings.modelConfigs.overrides = newOverrides;
+
+    // Preservar e registrar policyPaths se existirem políticas
+    const policiesDir = path.join(base, '.gemini', 'policies');
+    if (fs.existsSync(policiesDir)) {
+      const pFiles = fs.readdirSync(policiesDir).filter(f => f.endsWith('.toml')).map(f => path.join(policiesDir, f));
+      const polPaths = [policiesDir, ...pFiles];
+      settings.policyPaths = Array.from(new Set([...(settings.policyPaths || []), ...polPaths]));
+      settings.adminPolicyPaths = Array.from(new Set([...(settings.adminPolicyPaths || []), ...polPaths]));
     }
 
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+
+    // Sincronizar também no process.cwd() se for diferente
+    if (path.resolve(base) !== path.resolve(process.cwd())) {
+      const rootSettings = path.join(process.cwd(), '.gemini', 'settings.json');
+      fs.writeFileSync(rootSettings, JSON.stringify(settings, null, 2), 'utf8');
+    }
+
+    // Sincronizar também no home do usuário ~/.gemini/settings.json para garantia total de resolução do CLI
+    try {
+      const homeGemini = path.join(os.homedir(), '.gemini');
+      if (fs.existsSync(homeGemini)) {
+        const homeSettings = path.join(homeGemini, 'settings.json');
+        fs.writeFileSync(homeSettings, JSON.stringify(settings, null, 2), 'utf8');
+      }
+    } catch {}
+
+    sysLog.info('AGENT', `Configurações de modelos e agentes sincronizadas com sucesso no settings.json.`);
   } catch (err) {
     sysLog.error('AGENT', `Erro ao sincronizar agents com settings.json: ${err}`);
   }

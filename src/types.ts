@@ -32,6 +32,7 @@ export interface AgentConfig {
   displayName: string;
   role: string;
   model: string;
+  backupAgentId?: string;
   description: string;
   baseInstructions?: string;
   systemInstructions: string;

@@ -5,6 +5,8 @@ import os from 'node:os';
 import { GoogleGenAI } from '@google/genai';
 import { CliStatus } from '../src/types.js';
 import { sysLog } from './logger-service.js';
+import { syncAgentsToSettings, loadAgents } from './agents-service.js';
+import { syncPoliciesToSettings } from './policies-service.js';
 
 let activeChildProcess: ChildProcess | null = null;
 let currentRetryTimeout: NodeJS.Timeout | null = null;
@@ -418,12 +420,23 @@ export interface CliExecutionParams {
   resume?: boolean;
   workDir?: string;
   agentId?: string;
+  backupAgentId?: string;
+  isBackupExecution?: boolean;
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  maxOutputTokens?: number;
+  thinking?: boolean;
+  systemInstructions?: string;
+  overrideBasePrompt?: boolean;
+  baseInstructions?: string;
   onEvent: (event: { type: string; data: any }) => void;
   onDone: (exitCode: number | null, signal: string | null) => void;
   onError: (error: Error) => void;
 }
 
 export const AGENT_FALLBACK_CHAINS: Record<string, string[]> = {
+  architect: ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3-flash'],
   auditor: ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'],
   investigator: ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3-flash'],
   principal: ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-3.5-flash'],
@@ -511,18 +524,6 @@ export function executeGeminiCli(
     finalPrompt = workspaceHeader + params.prompt;
   }
 
-  const args: string[] = [
-    '--debug',
-    '-p', finalPrompt,
-    '-o', 'stream-json',
-    '--skip-trust',
-  ];
-
-  const customPolicyPath = path.join(process.cwd(), '.gemini', 'web-preview-policy.toml');
-  if (fs.existsSync(customPolicyPath)) {
-    args.push('--policy', customPolicyPath);
-  }
-
   // Determine model: respect the configured model for the agent/execution, default to 'gemini-3.5-flash-lite'
   let requestedModel = state?.currentModel || params.model;
   if (!requestedModel || requestedModel === 'auto') {
@@ -539,13 +540,82 @@ export function executeGeminiCli(
     else if (requestedModel === 'gemini-3-flash') agentId = 'tester';
   }
 
+  const chosenModel = requestedModel;
+
+  // Sincronizar dinamicamente parâmetros do modelo (temperature, topP, topK, maxOutputTokens, thinking) no settings.json
+  try {
+    syncAgentsToSettings(cwd, agentId || 'principal', {
+      model: chosenModel,
+      temperature: params.temperature,
+      topP: params.topP,
+      topK: params.topK,
+      maxOutputTokens: params.maxOutputTokens,
+      thinking: params.thinking,
+    });
+  } catch (err) {
+    sysLog.warn('CLI', `Aviso ao sincronizar agentes no settings.json: ${err}`);
+  }
+
+  // Sincronizar diretórios e arquivos de políticas
+  try {
+    syncPoliciesToSettings(cwd);
+  } catch (err) {
+    sysLog.warn('CLI', `Aviso ao sincronizar políticas no settings.json: ${err}`);
+  }
+
+  const args: string[] = [
+    '--debug',
+    '-p', finalPrompt,
+    '-o', 'stream-json',
+    '--skip-trust',
+  ];
+
+  // Carregar todas as políticas do usuário (.gemini/policies/*.toml)
+  const policyDirs = [
+    path.join(cwd, '.gemini', 'policies'),
+    path.join(process.cwd(), '.gemini', 'policies'),
+  ];
+  const foundPolicyFiles: string[] = [];
+  for (const pDir of policyDirs) {
+    if (fs.existsSync(pDir)) {
+      try {
+        const pFiles = fs.readdirSync(pDir).filter((f) => f.endsWith('.toml'));
+        for (const pf of pFiles) {
+          const fullPath = path.join(pDir, pf);
+          if (!foundPolicyFiles.includes(fullPath)) {
+            foundPolicyFiles.push(fullPath);
+          }
+        }
+      } catch {}
+    }
+  }
+
+  // Adicionar arquivos de políticas do usuário como --policy e --admin-policy
+  for (const polFile of foundPolicyFiles) {
+    args.push('--policy', polFile);
+    args.push('--admin-policy', polFile);
+  }
+
+  // Adicionar diretórios de políticas
+  for (const pDir of policyDirs) {
+    if (fs.existsSync(pDir)) {
+      args.push('--policy', pDir);
+      args.push('--admin-policy', pDir);
+    }
+  }
+
+  // Política base de ambiente web-preview (prioridade 5 para permitir tools básicas sem bloquear regras do usuário)
+  const customPolicyPath = path.join(process.cwd(), '.gemini', 'web-preview-policy.toml');
+  if (fs.existsSync(customPolicyPath)) {
+    args.push('--policy', customPolicyPath);
+  }
+
   const fallbackChain = state?.fallbackChain || (AGENT_FALLBACK_CHAINS[agentId] || []);
   const retryCount = state?.retryCount || 1;
   const fallbackIndex = state?.fallbackIndex !== undefined 
     ? state.fallbackIndex 
     : (fallbackChain.indexOf(requestedModel) !== -1 ? fallbackChain.indexOf(requestedModel) : -1);
 
-  const chosenModel = requestedModel;
   args.push('-m', chosenModel);
 
   if (params.approvalMode) {
@@ -569,7 +639,26 @@ export function executeGeminiCli(
     cliPath = getLocalCliPath() || getGlobalCliPath() || 'gemini';
   }
 
-  const env = {
+  // Se houver instruções de sistema customizadas, aplicar via GEMINI_SYSTEM_MD
+  let systemPromptFile: string | null = null;
+  const effectiveSystemPrompt = params.overrideBasePrompt
+    ? (params.systemInstructions || '')
+    : [params.baseInstructions, params.systemInstructions].filter(Boolean).join('\n\n');
+
+  if (effectiveSystemPrompt && effectiveSystemPrompt.trim()) {
+    try {
+      const systemPromptDir = path.join(cwd, '.gemini');
+      if (!fs.existsSync(systemPromptDir)) {
+        fs.mkdirSync(systemPromptDir, { recursive: true });
+      }
+      systemPromptFile = path.join(systemPromptDir, `active-system-${Date.now()}.md`);
+      fs.writeFileSync(systemPromptFile, effectiveSystemPrompt.trim(), 'utf8');
+    } catch (err) {
+      sysLog.warn('CLI', `Não foi possível gerar system prompt customizado: ${err}`);
+    }
+  }
+
+  const env: NodeJS.ProcessEnv = {
     ...process.env,
     NO_COLOR: '1',
     FORCE_COLOR: '0',
@@ -577,6 +666,10 @@ export function executeGeminiCli(
     GEMINI_MAX_RETRIES: '0',
     MAX_RETRIES: '0',
   };
+
+  if (systemPromptFile) {
+    env.GEMINI_SYSTEM_MD = systemPromptFile;
+  }
 
   const child = spawn(cliPath, args, {
     cwd,
@@ -646,6 +739,11 @@ export function executeGeminiCli(
 
   child.on('close', (code) => {
     logStream.end();
+    if (systemPromptFile && fs.existsSync(systemPromptFile)) {
+      try {
+        fs.unlinkSync(systemPromptFile);
+      } catch {}
+    }
     if (code !== 0 && stderrText.includes("No previous sessions found")) {
       sysLog.warn('CLI', `Sessão ${params.sessionId} não encontrada, limpando cache.`);
       if (params.sessionId) knownSessions.delete(params.sessionId);
@@ -728,7 +826,84 @@ export function executeGeminiCli(
         reportedErrorText.includes('429') ||
         reportedErrorText.includes('RESOURCE_EXHAUSTED');
 
+      const isOverloadedError =
+        stderrText.toLowerCase().includes('503') ||
+        stderrText.toLowerCase().includes('unavailable') ||
+        stderrText.toLowerCase().includes('high demand') ||
+        stderrText.toLowerCase().includes('overloaded') ||
+        stderrText.toLowerCase().includes('service unavailable') ||
+        reportedErrorText.toLowerCase().includes('503') ||
+        reportedErrorText.toLowerCase().includes('high demand') ||
+        reportedErrorText.toLowerCase().includes('overloaded') ||
+        reportedErrorText.toLowerCase().includes('service unavailable');
+
       const apiErrCode = getApiErrorCode(code, stderrText, reportedErrorText);
+
+      // Verificação do Agente Reserva (Fallback por Cotas ou Servidor Sobrecarregado)
+      if ((isQuotaError || isOverloadedError || apiErrCode === 429 || apiErrCode === 503 || apiErrCode === 500) && !params.isBackupExecution && !isCancelled) {
+        try {
+          const allAgents = loadAgents(cwd);
+          const currentAgentObj = allAgents.find(
+            (a) => a.id.toLowerCase() === (agentId || '').toLowerCase() || a.name.toLowerCase() === (agentId || '').toLowerCase()
+          );
+          const targetBackupId = params.backupAgentId || currentAgentObj?.backupAgentId;
+          const backupAgent = targetBackupId
+            ? allAgents.find(
+                (a) => a.id.toLowerCase() === targetBackupId.toLowerCase() || a.name.toLowerCase() === targetBackupId.toLowerCase()
+              )
+            : null;
+
+          if (backupAgent && backupAgent.id !== currentAgentObj?.id) {
+            const reasonText = isQuotaError || apiErrCode === 429
+              ? 'Cotas de requisição esgotadas (Erro 429 / Quota Exceeded)'
+              : 'Servidor sobrecarregado / Alta demanda (Erro 503/500 / High Demand)';
+            const primaryName = currentAgentObj?.displayName || currentAgentObj?.name || agentId || 'Agente Titular';
+            const backupName = backupAgent.displayName || backupAgent.name;
+
+            params.onEvent({
+              type: 'stream_event',
+              data: {
+                type: 'message',
+                role: 'assistant',
+                content: `\n🛡️ **[Agente Reserva Acionado]**\nO agente titular **${primaryName}** encontrou uma restrição de API: *${reasonText}*.\n\n🔄 **Acionando automaticamente o Agente Reserva: ${backupName}** (Modelo: \`${backupAgent.model}\`) para concluir sua solicitação com resiliência...\n\n`,
+              },
+            });
+
+            sysLog.warn(
+              'CLI',
+              `Agente titular ${agentId} encontrou ${reasonText}. Acionando agente reserva ${backupAgent.name} (Modelo: ${backupAgent.model}).`
+            );
+
+            currentRetryTimeout = setTimeout(() => {
+              currentRetryTimeout = null;
+              if (!isCancelled) {
+                executeGeminiCli(
+                  {
+                    ...params,
+                    agentId: backupAgent.id || backupAgent.name,
+                    model: backupAgent.model,
+                    backupAgentId: undefined, // não recursivo
+                    isBackupExecution: true,
+                    systemInstructions: backupAgent.systemInstructions,
+                    baseInstructions: backupAgent.baseInstructions,
+                    overrideBasePrompt: backupAgent.overrideBasePrompt,
+                    temperature: backupAgent.temperature,
+                    topP: backupAgent.topP,
+                    topK: backupAgent.topK,
+                    maxOutputTokens: backupAgent.maxOutputTokens,
+                    thinking: backupAgent.thinking,
+                    resume: true,
+                  },
+                  true
+                );
+              }
+            }, 1200);
+            return;
+          }
+        } catch (err: any) {
+          sysLog.warn('CLI', `Falha ao tentar acionar agente reserva: ${err.message}`);
+        }
+      }
 
       if (apiErrCode !== null) {
         // Only retry if not a "Hard Quota" or if explicitly allowed

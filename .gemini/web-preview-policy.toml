@@ -1,5 +1,5 @@
 # Web Preview Environment Policy to allow essential development tools in headless execution.
-# This prevents tools from being blocked by default non-interactive / headless checks.
+# Baseline low priority (5) so that any user-defined policies take precedence.
 
 [[rule]]
 toolName = [
@@ -11,4 +11,4 @@ toolName = [
   "google_web_search"
 ]
 decision = "allow"
-priority = 90
+priority = 5

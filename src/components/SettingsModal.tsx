@@ -774,6 +774,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <ModelCatalogView
                   agents={agents}
                   onResetDefaultAgentsConfig={onResetDefaultAgentsConfig || (async () => {})}
+                  onSaveAgent={onSaveAgent}
                 />
               </div>
             )}
@@ -1136,6 +1137,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               placeholder="Adicione instruções contextuais ou específicas para esta camada..."
                               className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200 dark:border-amber-800/50 font-mono text-[11px] text-zinc-800 dark:text-zinc-200 focus:ring-2 focus:ring-amber-500/20 outline-none leading-relaxed"
                             />
+                          </div>
+
+                          {/* 5. AGENTE RESERVA (FALLBACK POR COTAS OU SOBRECARGA) */}
+                          <div className="p-4 rounded-2xl bg-blue-50/40 dark:bg-blue-950/10 border border-blue-200 dark:border-blue-900/30">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-blue-900 dark:text-blue-300">
+                                  5. Agente Reserva (Fallback por Cotas / Sobrecarga)
+                                </span>
+                              </div>
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                Auto-Failover
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-blue-700/80 dark:text-blue-400/80 mb-2 leading-relaxed">
+                              Agente que assumirá automaticamente a solicitação em caso de erro 429 (Cotas Esgotadas) ou 500/503 (Servidor Sobrecarregado).
+                            </p>
+                            <select
+                              value={editingAgent.backupAgentId || ''}
+                              onChange={(e) => setEditingAgent({ ...editingAgent, backupAgentId: e.target.value || undefined })}
+                              className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800/50 text-xs text-zinc-800 dark:text-zinc-200 outline-none focus:ring-2 focus:ring-blue-500/20"
+                            >
+                              <option value="">Nenhum (usar padrão do sistema)</option>
+                              {agents
+                                .filter((ag) => ag.id.toLowerCase() !== editingAgent.id?.toLowerCase() && ag.name.toLowerCase() !== editingAgent.name?.toLowerCase())
+                                .map((ag) => (
+                                  <option key={ag.id} value={ag.id}>
+                                    {ag.displayName || ag.name} ({ag.model})
+                                  </option>
+                                ))}
+                            </select>
                           </div>
                         </div>
                       </div>
@@ -1628,7 +1661,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   <button
                     onClick={() => {
-                      setEditingPolicy({ filename: 'nova-politica.toml', content: '[[rule]]\ntoolName = "*"\ndecision = "ask_user"\npriority = 10\n' });
+                      setEditingPolicy({ filename: 'nova-politica.toml', content: '[[rule]]\ntoolName = "*"\ndecision = "ask_user"\npriority = 100\n' });
                       setOriginalFilename(null);
                       setIsNewPolicy(true);
                     }}
