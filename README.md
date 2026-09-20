@@ -22,7 +22,59 @@ Interface gráfica e ambiente de trabalho profissional para o **Gemini CLI (v0.5
 
 ---
 
-## 🛠️ Como Executar
+## 📦 Instalação, Atualização, Reset e Desinstalação
+
+### 1. Instalação / Atualização Oficial (`install.sh`)
+O instalador oficial baixa/clona automaticamente a versão mais recente do repositório GitHub (`https://github.com/pinguelanarosca/GCLIVisualInterface`), instala todas as dependências, compila o aplicativo e registra os executáveis e atalhos do sistema. É **idempotente** e pode ser executado para instalar do zero ou atualizar uma versão existente.
+
+```bash
+sudo ./install.sh
+```
+
+### 2. Reset para Estado Recém-Instalado (`reset.sh` ou `npm run reset`)
+Restaura o ambiente do aplicativo ao estado limpo original de uma instalação nova, limpando dados locais, histórico de conversas, logs, políticas customizadas e agentes criados, sem apagar arquivos pessoais do usuário.
+
+```bash
+./reset.sh
+# ou
+npm run reset
+```
+
+### 3. Desinstalação Completa (`uninstall.sh`)
+Remove completamente a aplicação, seus binários de sistema, atalhos do menu de aplicativos, políticas de sistema e diretórios de dados/configurações e logs criados pela aplicação.
+
+```bash
+sudo ./uninstall.sh
+```
+
+---
+
+## 🗂️ Inventário de Diretórios e Arquivos Pertencentes à Aplicação
+
+Os seguintes caminhos e artefatos são de propriedade e uso exclusivo da aplicação **GCLI Visual Interface**:
+
+* **Instalação do Sistema**:
+  * `/opt/gemini-gui` (Diretório principal de instalação do aplicativo)
+  * `/usr/local/bin/gemini-gui` e `/usr/bin/gemini-gui` (Executáveis / Atalhos CLI)
+  * `/usr/share/applications/gemini-gui.desktop` (Atalho do menu de aplicativos do Ubuntu/Linux)
+  * `/etc/gemini-cli/policies/deny-google-search.toml` (Política de segurança do sistema)
+
+* **Armazenamento e Estado do Usuário (`~/.gemini/`)**:
+  * `~/.gemini/history/` (Histórico de sessões do Gemini CLI)
+  * `~/.gemini/agents/` (Definições markdown de agentes customizados)
+  * `~/.gemini/projects.json` e `~/.gemini/projects.json.lock` (Índices de projetos do CLI)
+  * `~/.gemini/policies/deny-google-search.toml` e `~/.gemini/settings.json` (Políticas e configurações)
+  * `~/.gemini/tmp/` (Arquivos temporários e anexos de sessão)
+
+* **Workspace Local e Cache**:
+  * `.gemini-gui-storage.json` (Banco de dados de persistência local da interface GUI)
+  * `.gemini/` (Configurações, agentes, skills e logs do projeto na workspace local)
+  * `/tmp/gemini-gui-*.log`, `/tmp/gemini-client-error-*.json` e `cli-debug.log` (Logs temporários)
+  * `dist-ubuntu/` (Artefatos de empacotamento gerados)
+
+---
+
+## 🛠️ Como Executar em Desenvolvimento
 
 ### Pré-requisitos
 - Node.js 18+ ou 20+

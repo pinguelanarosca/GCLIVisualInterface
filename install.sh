@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+set -e
+
+REPO_URL="https://github.com/pinguelanarosca/GCLIVisualInterface"
+INSTALL_DIR="/opt/gemini-gui"
+TEMP_DIR="/tmp/gcli-install-source"
+
+echo "=================================================================="
+echo "   INSTALADOR / ATUALIZADOR OFICIAL - GCLI VISUAL INTERFACE       "
+echo "=================================================================="
+
+# Verificação de privilégios root/sudo para instalação em diretórios de sistema
+if [ "$EUID" -ne 0 ]; then
+    echo "ERRO: O instalador precisa de privilégios de administrador para instalar em $INSTALL_DIR."
+    echo "Por favor, execute: sudo ./install.sh"
+    exit 1
+fi
+
+echo "[1/6] Verificando dependências do sistema (git, node, npm)..."
+if ! command -v git &> /dev/null; then
+    echo "Instalando git..."
+    apt-get update -qq && apt-get install -y -qq git || true
+fi
+
+if ! command -v node &> /dev/null; then
+    echo "ERRO: Node.js (>= 18) não está instalado no sistema."
+    echo "Por favor instale o Node.js antes de continuar."
+    exit 1
+fi
+
+NODE_VER=$(node -v)
+echo "   Node.js versão detectada: $NODE_VER"
+
+echo "[2/6] Baixando a versão mais recente do repositório oficial no GitHub..."
+echo "   Repositório Fonte: $REPO_URL"
+rm -rf "$TEMP_DIR"
+git clone --depth 1 "$REPO_URL" "$TEMP_DIR"
+
+cd "$TEMP_DIR"
+COMMIT_HASH=$(git rev-parse HEAD 2>/dev/null || echo "desconhecido")
+COMMIT_DATE=$(git log -1 --format="%ci" 2>/dev/null || echo "desconhecido")
+COMMIT_MSG=$(git log -1 --format="%s" 2>/dev/null || echo "desconhecido")
+
+echo "------------------------------------------------------------------"
+echo "   VERSÃO DO GIT BAIXADA:"
+echo "   Commit:   $COMMIT_HASH"
+echo "   Data:     $COMMIT_DATE"
+echo "   Mensagem: $COMMIT_MSG"
+echo "------------------------------------------------------------------"
+
+echo "[3/6] Instalando arquivos da aplicação em $INSTALL_DIR..."
+mkdir -p "$INSTALL_DIR"
+
+# Sincronizar arquivos baixados do git diretamente para o diretório de instalação
+cp -rf "$TEMP_DIR"/* "$INSTALL_DIR/"
+cp -rf "$TEMP_DIR"/.* "$INSTALL_DIR/" 2>/dev/null || true
+
+cd "$INSTALL_DIR"
+
+echo "[4/6] Instalando dependências npm e compilando aplicação..."
+npm install --no-audit --no-fund
+npm run build
+
+echo "[5/6] Preparando executáveis, atalhos do sistema e permissões..."
+mkdir -p /usr/local/bin /usr/bin /usr/share/applications /etc/gemini-cli/policies
+
+cat << 'EOF' > /usr/local/bin/gemini-gui
+#!/usr/bin/env bash
+set -e
+
+APP_DIR="${GEMINI_GUI_DIR:-/opt/gemini-gui}"
+PORT="${PORT:-3000}"
+
+echo "=================================================="
+echo "Iniciando GCLI Visual Interface (Gemini CLI GUI)"
+echo "Diretório: $APP_DIR"
+echo "Porta: $PORT"
+echo "=================================================="
+
+cd "$APP_DIR"
+
+if [ -f "dist/server.cjs" ]; then
+    NODE_ENV=production node dist/server.cjs
+elif [ -f "server.ts" ]; then
+    NODE_ENV=production npx tsx server.ts
+else
+    echo "ERRO: Servidor compilado não encontrado em $APP_DIR"
+    exit 1
+fi
+EOF
+
+chmod +x /usr/local/bin/gemini-gui
+ln -sf /usr/local/bin/gemini-gui /usr/bin/gemini-gui 2>/dev/null || true
+
+# Criar atalho no Menu de Aplicativos
+cat << 'EOF' > /usr/share/applications/gemini-gui.desktop
+[Desktop Entry]
+Name=GCLI Visual Interface
+Comment=Interface Gráfica para Gemini CLI
+Exec=/usr/local/bin/gemini-gui
+Icon=utilities-terminal
+Terminal=true
+Type=Application
+Categories=Development;Utility;
+Keywords=gemini;ai;cli;gui;gcli;
+EOF
+
+chmod 644 /usr/share/applications/gemini-gui.desktop
+update-desktop-database 2>/dev/null || true
+
+echo "[6/6] Limpando arquivos temporários do instalador..."
+rm -rf "$TEMP_DIR"
+
+echo "=================================================================="
+echo "   INSTALAÇÃO CONCLUÍDA COM SUCESSO!                             "
+echo "   Repositório: $REPO_URL"
+echo "   Commit:      $COMMIT_HASH"
+echo "   Localização: $INSTALL_DIR"
+echo "   Executável:  /usr/local/bin/gemini-gui (comando: gemini-gui)"
+echo "=================================================================="

@@ -183,40 +183,119 @@ wait \$SERVER_PID
   const installScript = `#!/usr/bin/env bash
 set -e
 
-echo "=== Instalador Gemini CLI GUI para Ubuntu Linux ==="
+REPO_URL="https://github.com/pinguelanarosca/GCLIVisualInterface"
+INSTALL_DIR="/opt/gemini-gui"
+TEMP_DIR="/tmp/gcli-install-source"
 
-# Check root/sudo
+echo "=================================================================="
+echo "   INSTALADOR / ATUALIZADOR OFICIAL - GCLI VISUAL INTERFACE       "
+echo "=================================================================="
+
 if [ "$EUID" -ne 0 ]; then
-    echo "Por favor, execute este instalador com privilégios de administrador: sudo ./install.sh"
+    echo "ERRO: O instalador precisa de privilégios de administrador para instalar em $INSTALL_DIR."
+    echo "Por favor, execute: sudo ./install.sh"
     exit 1
 fi
 
-INSTALL_DIR="/opt/gemini-gui"
-BIN_LINK="/usr/bin/gemini-gui"
-DESKTOP_DIR="/usr/share/applications"
-
-echo "1. Criando diretório de instalação em \$INSTALL_DIR..."
-mkdir -p "\$INSTALL_DIR"
-
-echo "2. Copiando arquivos do aplicativo..."
-cp -r ./* "\$INSTALL_DIR/"
-
-echo "3. Configurando permissões de execução..."
-chmod +x "\$INSTALL_DIR/dist-ubuntu/gemini-gui" || chmod +x "\$INSTALL_DIR/gemini-gui"
-ln -sf "\$INSTALL_DIR/dist-ubuntu/gemini-gui" "\$BIN_LINK"
-
-echo "4. Instalando atalho de desktop..."
-if [ -f "\$INSTALL_DIR/dist-ubuntu/gemini-gui.desktop" ]; then
-    cp "\$INSTALL_DIR/dist-ubuntu/gemini-gui.desktop" "\$DESKTOP_DIR/"
-    update-desktop-database 2>/dev/null || true
+echo "[1/6] Verificando dependências do sistema (git, node, npm)..."
+if ! command -v git &> /dev/null; then
+    echo "Instalando git..."
+    apt-get update -qq && apt-get install -y -qq git || true
 fi
 
-echo ""
-echo "=== INSTALAÇÃO CONCLUÍDA COM SUCESSO! ==="
-echo "Você pode iniciar o aplicativo:"
-echo "  1. Pelo terminal digitando: gemini-gui"
-echo "  2. Pelo menu de aplicativos do Ubuntu pesquisando por 'Gemini CLI GUI'"
-echo ""
+if ! command -v node &> /dev/null; then
+    echo "ERRO: Node.js (>= 18) não está instalado no sistema."
+    echo "Por favor instale o Node.js antes de continuar."
+    exit 1
+fi
+
+NODE_VER=$(node -v)
+echo "   Node.js versão detectada: $NODE_VER"
+
+echo "[2/6] Baixando a versão mais recente do repositório oficial no GitHub..."
+echo "   Repositório Fonte: $REPO_URL"
+rm -rf "$TEMP_DIR"
+git clone --depth 1 "$REPO_URL" "$TEMP_DIR"
+
+cd "$TEMP_DIR"
+COMMIT_HASH=$(git rev-parse HEAD 2>/dev/null || echo "desconhecido")
+COMMIT_DATE=$(git log -1 --format="%ci" 2>/dev/null || echo "desconhecido")
+COMMIT_MSG=$(git log -1 --format="%s" 2>/dev/null || echo "desconhecido")
+
+echo "------------------------------------------------------------------"
+echo "   VERSÃO DO GIT BAIXADA:"
+echo "   Commit:   $COMMIT_HASH"
+echo "   Data:     $COMMIT_DATE"
+echo "   Mensagem: $COMMIT_MSG"
+echo "------------------------------------------------------------------"
+
+echo "[3/6] Instalando arquivos da aplicação em $INSTALL_DIR..."
+mkdir -p "$INSTALL_DIR"
+cp -rf "$TEMP_DIR"/* "$INSTALL_DIR/"
+cp -rf "$TEMP_DIR"/.* "$INSTALL_DIR/" 2>/dev/null || true
+
+cd "$INSTALL_DIR"
+
+echo "[4/6] Instalando dependências npm e compilando aplicação..."
+npm install --no-audit --no-fund
+npm run build
+
+echo "[5/6] Preparando executáveis, atalhos do sistema e permissões..."
+mkdir -p /usr/local/bin /usr/bin /usr/share/applications /etc/gemini-cli/policies
+
+cat << 'EOF' > /usr/local/bin/gemini-gui
+#!/usr/bin/env bash
+set -e
+
+APP_DIR="\${GEMINI_GUI_DIR:-/opt/gemini-gui}"
+PORT="\${PORT:-3000}"
+
+echo "=================================================="
+echo "Iniciando GCLI Visual Interface (Gemini CLI GUI)"
+echo "Diretório: \$APP_DIR"
+echo "Porta: \$PORT"
+echo "=================================================="
+
+cd "\$APP_DIR"
+
+if [ -f "dist/server.cjs" ]; then
+    NODE_ENV=production node dist/server.cjs
+elif [ -f "server.ts" ]; then
+    NODE_ENV=production npx tsx server.ts
+else
+    echo "ERRO: Servidor compilado não encontrado em \$APP_DIR"
+    exit 1
+fi
+EOF
+
+chmod +x /usr/local/bin/gemini-gui
+ln -sf /usr/local/bin/gemini-gui /usr/bin/gemini-gui 2>/dev/null || true
+
+cat << 'EOF' > /usr/share/applications/gemini-gui.desktop
+[Desktop Entry]
+Name=GCLI Visual Interface
+Comment=Interface Gráfica para Gemini CLI
+Exec=/usr/local/bin/gemini-gui
+Icon=utilities-terminal
+Terminal=true
+Type=Application
+Categories=Development;Utility;
+Keywords=gemini;ai;cli;gui;gcli;
+EOF
+
+chmod 644 /usr/share/applications/gemini-gui.desktop
+update-desktop-database 2>/dev/null || true
+
+echo "[6/6] Limpando arquivos temporários do instalador..."
+rm -rf "$TEMP_DIR"
+
+echo "=================================================================="
+echo "   INSTALAÇÃO CONCLUÍDA COM SUCESSO!                             "
+echo "   Repositório: $REPO_URL"
+echo "   Commit:      $COMMIT_HASH"
+echo "   Localização: $INSTALL_DIR"
+echo "   Executável:  /usr/local/bin/gemini-gui (comando: gemini-gui)"
+echo "=================================================================="
 `;
   fs.writeFileSync(path.join(distDir, 'install.sh'), installScript, { mode: 0o755 });
 
@@ -224,18 +303,81 @@ echo ""
   const uninstallScript = `#!/usr/bin/env bash
 set -e
 
-echo "=== Desinstalador Gemini CLI GUI ==="
+echo "=================================================================="
+echo "   DESINSTALADOR OFICIAL - GCLI VISUAL INTERFACE (GEMINI GUI)     "
+echo "=================================================================="
 
 if [ "$EUID" -ne 0 ]; then
-    echo "Por favor, execute como root: sudo ./uninstall.sh"
+    echo "ERRO: O desinstalador precisa de privilégios de administrador para remover componentes do sistema."
+    echo "Por favor, execute: sudo ./uninstall.sh"
     exit 1
 fi
 
-rm -f /usr/bin/gemini-gui
-rm -f /usr/share/applications/gemini-gui.desktop
-rm -rf /opt/gemini-gui
+REMOVED_PATHS=()
 
-echo "Gemini CLI GUI removido com sucesso do sistema."
+remove_target() {
+    local target="$1"
+    if [ -e "$target" ] || [ -L "$target" ]; then
+        rm -rf "$target"
+        REMOVED_PATHS+=("$target")
+        echo "   [REMOVIDO] $target"
+    fi
+}
+
+echo "[1/4] Removendo binários, executáveis e atalhos do sistema..."
+remove_target "/opt/gemini-gui"
+remove_target "/usr/local/bin/gemini-gui"
+remove_target "/usr/bin/gemini-gui"
+remove_target "/usr/share/applications/gemini-gui.desktop"
+update-desktop-database 2>/dev/null || true
+
+echo "[2/4] Removendo políticas de segurança de sistema criadas pela aplicação..."
+remove_target "/etc/gemini-cli/policies/deny-google-search.toml"
+rmdir /etc/gemini-cli/policies 2>/dev/null || true
+rmdir /etc/gemini-cli 2>/dev/null || true
+
+echo "[3/4] Removendo dados, configurações, histórico, logs e agentes da aplicação..."
+TARGET_USER_HOME="\${HOME:-/root}"
+USER_HOMES=("$TARGET_USER_HOME")
+
+if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    SUDO_HOME=$(eval echo "~\$SUDO_USER" 2>/dev/null || true)
+    if [ -n "$SUDO_HOME" ]; then
+        USER_HOMES+=("$SUDO_HOME")
+    fi
+fi
+
+for UHOME in "\${USER_HOMES[@]}"; do
+    if [ -d "$UHOME/.gemini" ]; then
+        remove_target "$UHOME/.gemini/history"
+        remove_target "$UHOME/.gemini/tmp"
+        remove_target "$UHOME/.gemini/agents"
+        remove_target "$UHOME/.gemini/projects.json"
+        remove_target "$UHOME/.gemini/projects.json.lock"
+        remove_target "$UHOME/.gemini/policies/deny-google-search.toml"
+        remove_target "$UHOME/.gemini/settings.json"
+        rmdir "$UHOME/.gemini/policies" 2>/dev/null || true
+        rmdir "$UHOME/.gemini" 2>/dev/null || true
+    fi
+done
+
+remove_target ".gemini-gui-storage.json"
+remove_target ".gemini"
+remove_target "dist-ubuntu"
+
+echo "[4/4] Removendo logs temporários..."
+remove_target "cli-debug.log"
+for f in /tmp/gemini-gui-*.log /tmp/gemini-client-error-*.json; do
+    if [ -f "$f" ]; then
+        remove_target "$f"
+    fi
+done
+
+echo "=================================================================="
+echo "   DESINSTALAÇÃO COMPLETA CONCLUÍDA COM SUCESSO!                 "
+echo "   Total de caminhos removidos: \${#REMOVED_PATHS[@]}"
+echo "   O sistema foi retornado ao estado limpo sem resíduos da app."
+echo "=================================================================="
 `;
   fs.writeFileSync(path.join(distDir, 'uninstall.sh'), uninstallScript, { mode: 0o755 });
 
