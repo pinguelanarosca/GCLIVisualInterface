@@ -79,21 +79,6 @@
             "temperature": 0.2
           }
         }
-      },
-      {
-        "match": {
-          "overrideScope": "Jumentinho"
-        },
-        "modelConfig": {
-          "generateContentConfig": {
-            "temperature": 2,
-            "topP": 1,
-            "topK": 0,
-            "thinkingConfig": {
-              "includeThoughts": true
-            }
-          }
-        }
       }
     ]
   }

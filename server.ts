@@ -5,7 +5,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Attempt to load .env from fallback locations if process.env.GEMINI_API_KEY is not set
 const fallbackEnvPaths = [
@@ -674,4 +678,7 @@ priority = 90
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error('Fatal error starting Gemini CLI GUI server:', err);
+  process.exit(1);
+});
