@@ -260,36 +260,21 @@ export function saveAgentToFile(agent: AgentConfig, targetDir?: string) {
     ? agent.systemInstructions
     : (agent.baseInstructions ? `${agent.baseInstructions}\n\n${agent.systemInstructions}` : agent.systemInstructions);
 
-  // Schema do Gemini CLI: name, model, description, tools, temperature, max_turns, etc.
+  // Schema nativo do Gemini CLI: name, model, description, kind, tools, temperature, max_turns
   const fmLines = [
     '---',
     `name: ${agent.name}`,
-    `model: ${agent.model}`,
-    `description: "${agent.description.replace(/"/g, '\\"')}"`,
+    `model: ${agent.model || 'gemini-3.5-flash-lite'}`,
+    `description: "${(agent.description || '').replace(/"/g, '\\"')}"`,
     `kind: ${agent.kind || 'local'}`,
     `tools: ${JSON.stringify(agent.tools || ['*'])}`,
   ];
 
-  if (agent.backupAgentId) {
-    fmLines.push(`backup_agent: ${agent.backupAgentId}`);
-  }
   if (typeof agent.temperature === 'number') {
     fmLines.push(`temperature: ${agent.temperature}`);
   }
   if (typeof agent.maxTurns === 'number') {
     fmLines.push(`max_turns: ${agent.maxTurns}`);
-  }
-  if (typeof agent.topP === 'number') {
-    fmLines.push(`top_p: ${agent.topP}`);
-  }
-  if (typeof agent.topK === 'number') {
-    fmLines.push(`top_k: ${agent.topK}`);
-  }
-  if (typeof agent.maxOutputTokens === 'number') {
-    fmLines.push(`max_output_tokens: ${agent.maxOutputTokens}`);
-  }
-  if (typeof agent.thinking === 'boolean') {
-    fmLines.push(`thinking: ${agent.thinking}`);
   }
 
   fmLines.push('---');
@@ -299,10 +284,11 @@ export function saveAgentToFile(agent: AgentConfig, targetDir?: string) {
   const filePath = path.join(agentsDir, `${agent.name}.md`);
   fs.writeFileSync(filePath, fmLines.join('\n'), 'utf8');
 
-  // Salvar metadados de UI
+  // Salvar metadados estendidos da GUI em .metadata.json (para não poluir o schema nativo do CLI)
   const metadata = loadMetadata(targetDir);
   metadata[agent.name] = {
     displayName: agent.displayName,
+    role: agent.role,
     baseInstructions: agent.baseInstructions,
     systemInstructions: agent.systemInstructions,
     overrideBasePrompt: agent.overrideBasePrompt,
@@ -314,7 +300,9 @@ export function saveAgentToFile(agent: AgentConfig, targetDir?: string) {
     conceptualProfile: agent.conceptualProfile,
     maxTurns: agent.maxTurns,
     kind: agent.kind,
+    tools: agent.tools,
     backupAgentId: agent.backupAgentId,
+    enabled: agent.enabled !== false,
   };
   saveMetadata(metadata, targetDir);
 
