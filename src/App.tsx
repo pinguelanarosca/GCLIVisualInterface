@@ -332,6 +332,8 @@ export function App() {
       let assistantContent = '';
       let hasError = false;
       let errorMessage = '';
+      let capturedFinalApiRequest: any = null;
+      let capturedParameterOrigins: any = null;
       const toolCalls: Record<string, any> = {};
 
       while (true) {
@@ -350,6 +352,12 @@ export function App() {
             try {
               const eventPayload = JSON.parse(rawData);
               rawEventsList.push(eventPayload);
+
+              // Capture finalApiRequest from backend
+              if (eventPayload.type === 'final_api_request' && eventPayload.finalApiRequest) {
+                capturedFinalApiRequest = eventPayload.finalApiRequest;
+                capturedParameterOrigins = eventPayload.parameterOrigins;
+              }
 
               // Inspect Gemini CLI JSON stream event
               if (
@@ -423,6 +431,8 @@ export function App() {
                         content: displayContent,
                         toolCalls: Object.values(toolCalls),
                         isStreaming: true,
+                        finalApiRequest: capturedFinalApiRequest || m.finalApiRequest,
+                        parameterOrigins: capturedParameterOrigins || m.parameterOrigins,
                       }
                     : m
                 )
@@ -468,6 +478,8 @@ export function App() {
                 content: finalContent,
                 toolCalls: Object.values(toolCalls),
                 isStreaming: false,
+                finalApiRequest: capturedFinalApiRequest || m.finalApiRequest,
+                parameterOrigins: capturedParameterOrigins || m.parameterOrigins,
                 rawPayloadReceived,
               }
             : m
@@ -480,6 +492,8 @@ export function App() {
         content: finalContent,
         toolCalls: Object.values(toolCalls),
         isStreaming: false,
+        finalApiRequest: capturedFinalApiRequest || assistantPlaceholder.finalApiRequest,
+        parameterOrigins: capturedParameterOrigins || assistantPlaceholder.parameterOrigins,
         rawPayloadReceived,
       };
 

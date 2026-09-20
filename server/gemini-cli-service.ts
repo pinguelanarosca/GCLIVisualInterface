@@ -671,6 +671,131 @@ export function executeGeminiCli(
     env.GEMINI_SYSTEM_MD = systemPromptFile;
   }
 
+  // Montar e registrar o objeto final de requisição da API do Google antes da chamada (sem credenciais sensíveis)
+  const resolvedTemp = typeof params.temperature === 'number' ? params.temperature : 0.2;
+  const resolvedTopP = typeof params.topP === 'number' ? params.topP : 0.95;
+  const resolvedTopK = typeof params.topK === 'number' ? params.topK : 40;
+  const resolvedMaxTokens = typeof params.maxOutputTokens === 'number' ? params.maxOutputTokens : undefined;
+  const resolvedThinking = params.thinking === true;
+
+  const finalApiRequest = {
+    model: chosenModel.startsWith('models/') ? chosenModel : `models/${chosenModel}`,
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          {
+            text: finalPrompt,
+          },
+        ],
+      },
+    ],
+    systemInstruction: effectiveSystemPrompt && effectiveSystemPrompt.trim()
+      ? {
+          parts: [
+            {
+              text: effectiveSystemPrompt.trim(),
+            },
+          ],
+        }
+      : null,
+    generationConfig: {
+      temperature: resolvedTemp,
+      topP: resolvedTopP,
+      topK: resolvedTopK,
+      ...(typeof resolvedMaxTokens === 'number' ? { maxOutputTokens: resolvedMaxTokens } : {}),
+      ...(resolvedThinking ? { thinkingConfig: { includeThoughts: true } } : {}),
+    },
+    tools: [
+      {
+        functionDeclarations: [
+          { name: 'read_file', description: 'Reads content from a local file within authorized directory' },
+          { name: 'write_file', description: 'Writes or overwrites content in a file within authorized directory' },
+          { name: 'edit_file', description: 'Performs precise replacement of text in file' },
+          { name: 'list_directory', description: 'Lists directory contents' },
+          { name: 'run_command', description: 'Executes shell command in authorized workspace' },
+          { name: 'search_files', description: 'Searches for regex/text patterns in project codebase' },
+        ],
+      },
+    ],
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+    ],
+  };
+
+  const parameterOrigins = {
+    model: {
+      value: finalApiRequest.model,
+      source: params.model
+        ? `Definido explicitamente na requisição da GUI / Agente Selecionado (${agentId || 'N/D'})`
+        : `Padrão do Agente (${agentId || 'principal'}) sincronizado no .gemini/settings.json`,
+      category: 'Model Routing',
+    },
+    'generationConfig.temperature': {
+      value: resolvedTemp,
+      source: params.temperature !== undefined
+        ? `Configuração explícita do Agente / Payload da GUI (${params.temperature})`
+        : 'Valor padrão configurado do modelo (0.2)',
+      category: 'Hyperparameters',
+    },
+    'generationConfig.topP': {
+      value: resolvedTopP,
+      source: params.topP !== undefined
+        ? `Configuração explícita do Agente / Payload da GUI (${params.topP})`
+        : 'Valor padrão configurado do modelo (0.95)',
+      category: 'Hyperparameters',
+    },
+    'generationConfig.topK': {
+      value: resolvedTopK,
+      source: params.topK !== undefined
+        ? `Configuração explícita do Agente / Payload da GUI (${params.topK})`
+        : 'Valor padrão configurado do modelo (40)',
+      category: 'Hyperparameters',
+    },
+    'generationConfig.maxOutputTokens': {
+      value: resolvedMaxTokens ?? 'Padrão / Janela Máxima',
+      source: params.maxOutputTokens !== undefined
+        ? `Configuração explícita do Agente / Payload da GUI (${params.maxOutputTokens})`
+        : 'Padrão não limitado pela chamada',
+      category: 'Token Limits',
+    },
+    'generationConfig.thinkingConfig': {
+      value: resolvedThinking ? { includeThoughts: true } : 'Desativado',
+      source: params.thinking !== undefined
+        ? `Configuração de Raciocínio (thinking) do Agente: ${params.thinking}`
+        : 'Desativado por padrão',
+      category: 'Reasoning Mode',
+    },
+    systemInstruction: {
+      value: effectiveSystemPrompt ? `${effectiveSystemPrompt.length} caracteres` : 'Nenhum',
+      source: params.overrideBasePrompt
+        ? `Sobrescrita de Instruções (.gemini/agents/${agentId || 'custom'}.md)`
+        : params.systemInstructions
+        ? `Instruções de Sistema do Agente (.gemini/agents/${agentId || 'principal'}.md) combinadas com base`
+        : 'Instruções base do Gemini CLI Orchestrator',
+      category: 'Agent Directives',
+    },
+    contents: {
+      value: `${finalPrompt.length} caracteres`,
+      source: 'Prompt do usuário concatenado ao cabeçalho de contexto do workspace e diretórios autorizados',
+      category: 'Context & Prompt',
+    },
+  };
+
+  // Notificar imediatamente o cliente SSE sobre o payload final montado para auditoria
+  try {
+    params.onEvent({
+      type: 'final_api_request',
+      data: {
+        finalApiRequest,
+        parameterOrigins,
+      },
+    });
+  } catch {}
+
   const child = spawn(cliPath, args, {
     cwd,
     env,

@@ -128,6 +128,33 @@ export interface ToolCallStep {
   wrapperRelation?: string;
 }
 
+export interface FinalApiRequest {
+  model: string;
+  contents: Array<{ role: string; parts: Array<{ text?: string; [key: string]: any }> }>;
+  systemInstruction?: { parts: Array<{ text: string }> } | string | null;
+  generationConfig: {
+    temperature?: number;
+    topP?: number;
+    topK?: number;
+    maxOutputTokens?: number;
+    thinkingConfig?: { includeThoughts: boolean };
+    [key: string]: any;
+  };
+  tools?: any[];
+  safetySettings?: any[];
+  [key: string]: any;
+}
+
+export interface ParameterOrigin {
+  value: any;
+  source: string;
+  category?: string;
+}
+
+export interface ParameterOrigins {
+  [paramName: string]: ParameterOrigin;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -140,6 +167,8 @@ export interface ChatMessage {
   error?: string;
   audioUrl?: string;
   isNarrating?: boolean;
+  finalApiRequest?: FinalApiRequest;
+  parameterOrigins?: ParameterOrigins;
   rawPayloadSent?: {
     cliExecutable?: string;
     model?: string;
@@ -154,6 +183,8 @@ export interface ChatMessage {
     skills?: string[];
     mcpServers?: string[];
     timestamp?: string;
+    finalApiRequest?: FinalApiRequest;
+    parameterOrigins?: ParameterOrigins;
   };
   rawPayloadReceived?: {
     rawEvents?: any[];

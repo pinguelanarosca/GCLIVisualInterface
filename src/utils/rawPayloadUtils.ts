@@ -1,7 +1,9 @@
-import { ChatMessage, AgentConfig, ProjectItem, AuthorizedDir, SkillConfig, McpConfig } from '../types.js';
+import { ChatMessage, AgentConfig, ProjectItem, AuthorizedDir, SkillConfig, McpConfig, FinalApiRequest, ParameterOrigins } from '../types.js';
 import { estimateTokens } from './tokenUtils.js';
 
 export interface RawInspectionData {
+  finalApiRequest: FinalApiRequest;
+  parameterOrigins: ParameterOrigins;
   input: {
     cliExecutable: string;
     model: string;
@@ -66,6 +68,115 @@ export function getRawInspectionData(
     timestamp: msg.timestamp,
   };
 
+  // Resolve final API request if attached or construct the precise payload effectively sent to Google API
+  const resolvedModel = (model.startsWith('models/') ? model : `models/${model}`);
+  const resolvedTemp = typeof agent?.temperature === 'number' ? agent.temperature : 0.2;
+  const resolvedTopP = typeof agent?.topP === 'number' ? agent.topP : 0.95;
+  const resolvedTopK = typeof agent?.topK === 'number' ? agent.topK : 40;
+  const resolvedMaxTokens = typeof agent?.maxOutputTokens === 'number' ? agent.maxOutputTokens : undefined;
+  const resolvedThinking = agent?.thinking === true;
+
+  const finalApiRequest: FinalApiRequest = msg.finalApiRequest || msg.rawPayloadSent?.finalApiRequest || {
+    model: resolvedModel,
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          {
+            text: inputData.fullInjectedPrompt || msg.content,
+          },
+        ],
+      },
+    ],
+    systemInstruction: sysInst.trim()
+      ? {
+          parts: [
+            {
+              text: sysInst.trim(),
+            },
+          ],
+        }
+      : null,
+    generationConfig: {
+      temperature: resolvedTemp,
+      topP: resolvedTopP,
+      topK: resolvedTopK,
+      ...(typeof resolvedMaxTokens === 'number' ? { maxOutputTokens: resolvedMaxTokens } : {}),
+      ...(resolvedThinking ? { thinkingConfig: { includeThoughts: true } } : {}),
+    },
+    tools: [
+      {
+        functionDeclarations: [
+          { name: 'read_file', description: 'Reads content from a local file within authorized directory' },
+          { name: 'write_file', description: 'Writes or overwrites content in a file within authorized directory' },
+          { name: 'edit_file', description: 'Performs precise replacement of text in file' },
+          { name: 'list_directory', description: 'Lists directory contents' },
+          { name: 'run_command', description: 'Executes shell command in authorized workspace' },
+          { name: 'search_files', description: 'Searches for regex/text patterns in project codebase' },
+        ],
+      },
+    ],
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+    ],
+  };
+
+  const parameterOrigins: ParameterOrigins = msg.parameterOrigins || msg.rawPayloadSent?.parameterOrigins || {
+    model: {
+      value: finalApiRequest.model,
+      source: `Configuração do Agente (${agent?.id || agentName}) sincronizada no .gemini/settings.json`,
+      category: 'Model Routing',
+    },
+    'generationConfig.temperature': {
+      value: resolvedTemp,
+      source: agent?.temperature !== undefined
+        ? `Configuração explícita do Agente (${agent.id || agentName})`
+        : 'Valor padrão do modelo (0.2)',
+      category: 'Hyperparameters',
+    },
+    'generationConfig.topP': {
+      value: resolvedTopP,
+      source: agent?.topP !== undefined
+        ? `Configuração explícita do Agente (${agent.id || agentName})`
+        : 'Valor padrão do modelo (0.95)',
+      category: 'Hyperparameters',
+    },
+    'generationConfig.topK': {
+      value: resolvedTopK,
+      source: agent?.topK !== undefined
+        ? `Configuração explícita do Agente (${agent.id || agentName})`
+        : 'Valor padrão do modelo (40)',
+      category: 'Hyperparameters',
+    },
+    'generationConfig.maxOutputTokens': {
+      value: resolvedMaxTokens ?? 'Padrão / Janela Máxima',
+      source: agent?.maxOutputTokens !== undefined
+        ? `Configuração explícita do Agente (${agent.id || agentName})`
+        : 'Padrão não limitado pela chamada',
+      category: 'Token Limits',
+    },
+    'generationConfig.thinkingConfig': {
+      value: resolvedThinking ? { includeThoughts: true } : 'Desativado',
+      source: agent?.thinking !== undefined
+        ? `Configuração de Raciocínio (thinking) do Agente: ${agent.thinking}`
+        : 'Desativado por padrão',
+      category: 'Reasoning Mode',
+    },
+    systemInstruction: {
+      value: sysInst ? `${sysInst.length} caracteres` : 'Nenhum',
+      source: `Instruções de Sistema do Agente (.gemini/agents/${agent?.id || 'principal'}.md)`,
+      category: 'Agent Directives',
+    },
+    contents: {
+      value: `${(inputData.fullInjectedPrompt || msg.content).length} caracteres`,
+      source: 'Prompt do usuário + Cabeçalho de Contexto de Workspace injetado',
+      category: 'Context & Prompt',
+    },
+  };
+
   // Build raw events log if missing
   const rawEventsFromMsg = msg.rawPayloadReceived?.rawEvents || [];
   if (rawEventsFromMsg.length === 0 && !isUser) {
@@ -115,6 +226,8 @@ export function getRawInspectionData(
   const outputTokens = estimateTokens(msg.content);
 
   return {
+    finalApiRequest,
+    parameterOrigins,
     input: {
       cliExecutable: inputData.cliExecutable || 'gemini',
       model: inputData.model || model,
@@ -145,3 +258,4 @@ export function getRawInspectionData(
     },
   };
 }
+
