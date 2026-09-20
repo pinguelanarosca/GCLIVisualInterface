@@ -704,15 +704,6 @@ export function syncAgentsToSettings(
       }
     }
 
-    // Sincronizar também no home do usuário ~/.gemini/settings.json para garantia total de resolução do CLI
-    try {
-      const homeGemini = path.join(os.homedir(), '.gemini');
-      if (fs.existsSync(homeGemini)) {
-        const homeSettings = path.join(homeGemini, 'settings.json');
-        fs.writeFileSync(homeSettings, JSON.stringify(settings, null, 2), 'utf8');
-      }
-    } catch {}
-
     sysLog.info('AGENT', `Configurações de modelos e agentes sincronizadas com sucesso no settings.json.`);
   } catch (err) {
     sysLog.error('AGENT', `Erro ao sincronizar agents com settings.json: ${err}`);

@@ -16,6 +16,10 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+echo "Verificando e encerrando instâncias ativas do gemini-gui..."
+pkill -f "dist/server.cjs" || true
+pkill -f "gemini-gui" || true
+
 echo "[1/6] Verificando dependências do sistema (git, node, npm)..."
 if ! command -v git &> /dev/null; then
     echo "Instalando git..."
@@ -48,20 +52,39 @@ echo "   Data:     $COMMIT_DATE"
 echo "   Mensagem: $COMMIT_MSG"
 echo "------------------------------------------------------------------"
 
-echo "[3/6] Instalando arquivos da aplicação em $INSTALL_DIR..."
-mkdir -p "$INSTALL_DIR"
+echo "[3/6] Removendo instalação e launchers anteriores para garantir idempotência limpa..."
+rm -rf "$INSTALL_DIR"
+rm -f "/usr/local/bin/gemini-gui" "/usr/bin/gemini-gui" "/usr/share/applications/gemini-gui.desktop"
 
-# Sincronizar arquivos baixados do git diretamente para o diretório de instalação
+# Obter diretórios Home relevantes para limpar o estado antigo EXCLUSIVO da GUI
+TARGET_USER_HOME="${HOME:-/root}"
+USER_HOMES=("$TARGET_USER_HOME")
+if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    SUDO_HOME=$(eval echo "~$SUDO_USER" 2>/dev/null || true)
+    if [ -n "$SUDO_HOME" ]; then
+        USER_HOMES+=("$SUDO_HOME")
+    fi
+fi
+
+for UHOME in "${USER_HOMES[@]}"; do
+    if [ -n "$UHOME" ]; then
+        rm -rf "$UHOME/.local/share/gemini-gui"
+        rm -f "$UHOME/.gemini-gui-storage.json" 2>/dev/null || true
+    fi
+done
+
+echo "[4/6] Instalando arquivos da aplicação em $INSTALL_DIR..."
+mkdir -p "$INSTALL_DIR"
 cp -rf "$TEMP_DIR"/* "$INSTALL_DIR/"
 cp -rf "$TEMP_DIR"/.* "$INSTALL_DIR/" 2>/dev/null || true
 
 cd "$INSTALL_DIR"
 
-echo "[4/6] Instalando dependências npm e compilando aplicação..."
+echo "[5/6] Instalando dependências npm e compilando aplicação..."
 npm install --no-audit --no-fund
 npm run build
 
-echo "[5/6] Preparando executáveis, atalhos do sistema e permissões..."
+echo "[6/6] Preparando executáveis, atalhos do sistema e permissões..."
 mkdir -p /usr/local/bin /usr/bin /usr/share/applications /etc/gemini-cli/policies
 
 cat << 'EOF' > /usr/local/bin/gemini-gui
@@ -108,7 +131,7 @@ EOF
 chmod 644 /usr/share/applications/gemini-gui.desktop
 update-desktop-database 2>/dev/null || true
 
-echo "[6/6] Limpando arquivos temporários do instalador..."
+# Limpando arquivos temporários do instalador
 rm -rf "$TEMP_DIR"
 
 echo "=================================================================="

@@ -140,30 +140,6 @@ export function saveMcpSettings(servers: McpConfig[], targetDir?: string) {
 
   settings.mcpServers = mcpServers;
   fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf8');
-
-  // Sincronizar também no ~/.gemini/settings.json para a CLI do sistema
-  try {
-    const globalSettingsPath = path.join(os.homedir(), '.gemini', 'settings.json');
-    const globalDir = path.dirname(globalSettingsPath);
-    if (!fs.existsSync(globalDir)) {
-      fs.mkdirSync(globalDir, { recursive: true });
-    }
-    let globalSettings: any = {};
-    if (fs.existsSync(globalSettingsPath)) {
-      try {
-        globalSettings = JSON.parse(fs.readFileSync(globalSettingsPath, 'utf8'));
-      } catch {
-        globalSettings = {};
-      }
-    }
-    globalSettings.mcpServers = {
-      ...(globalSettings.mcpServers || {}),
-      ...mcpServers,
-    };
-    fs.writeFileSync(globalSettingsPath, JSON.stringify(globalSettings, null, 2), 'utf8');
-  } catch (err) {
-    console.error('Erro ao salvar mcpServers em ~/.gemini/settings.json:', err);
-  }
 }
 
 export async function testMcpServer(mcp: McpConfig): Promise<{ success: boolean; message: string }> {

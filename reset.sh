@@ -29,21 +29,7 @@ done
 # 2. Remover diretório local da workspace .gemini/
 rm -rf .gemini/
 
-# 3. Remover histórico, logs e projetos do Gemini CLI criados pela aplicação nos diretórios HOME
-for UHOME in "${USER_HOMES[@]}"; do
-    if [ -n "$UHOME" ] && [ -d "$UHOME/.gemini" ]; then
-        rm -rf "$UHOME/.gemini/history"
-        rm -rf "$UHOME/.gemini/tmp"
-        rm -rf "$UHOME/.gemini/agents"
-        rm -rf "$UHOME/.gemini/projects.json"
-        rm -rf "$UHOME/.gemini/projects.json.lock"
-        rm -f "$UHOME/.gemini/policies/deny-google-search.toml"
-        rm -f "$UHOME/.gemini/settings.json"
-        rmdir "$UHOME/.gemini/policies" 2>/dev/null || true
-    fi
-done
-
-# 4. Remover políticas de sistema criadas pela aplicação
+# 3. Remover políticas de sistema criadas pela aplicação
 if [ -f "/etc/gemini-cli/policies/deny-google-search.toml" ]; then
     rm -f "/etc/gemini-cli/policies/deny-google-search.toml"
 fi

@@ -22,6 +22,10 @@ remove_target() {
     fi
 }
 
+echo "Verificando e encerrando instâncias ativas do gemini-gui..."
+pkill -f "dist/server.cjs" || true
+pkill -f "gemini-gui" || true
+
 echo "[1/4] Removendo binários, executáveis e atalhos do sistema..."
 remove_target "/opt/gemini-gui"
 remove_target "/usr/local/bin/gemini-gui"
@@ -34,7 +38,7 @@ remove_target "/etc/gemini-cli/policies/deny-google-search.toml"
 rmdir /etc/gemini-cli/policies 2>/dev/null || true
 rmdir /etc/gemini-cli 2>/dev/null || true
 
-echo "[3/4] Removendo dados, configurações, histórico, logs e agentes da aplicação..."
+echo "[3/4] Removendo dados e configurações exclusivos da GUI..."
 TARGET_USER_HOME="${HOME:-/root}"
 USER_HOMES=("$TARGET_USER_HOME")
 
@@ -45,23 +49,13 @@ if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
     fi
 fi
 
-# Remover em todos os diretórios HOME relevantes
+# Remover em todos os diretórios HOME relevantes exclusivamente o estado da GUI
 for UHOME in "${USER_HOMES[@]}"; do
     remove_target "$UHOME/.local/share/gemini-gui"
-    if [ -d "$UHOME/.gemini" ]; then
-        remove_target "$UHOME/.gemini/history"
-        remove_target "$UHOME/.gemini/tmp"
-        remove_target "$UHOME/.gemini/agents"
-        remove_target "$UHOME/.gemini/projects.json"
-        remove_target "$UHOME/.gemini/projects.json.lock"
-        remove_target "$UHOME/.gemini/policies/deny-google-search.toml"
-        remove_target "$UHOME/.gemini/settings.json"
-        rmdir "$UHOME/.gemini/policies" 2>/dev/null || true
-        rmdir "$UHOME/.gemini" 2>/dev/null || true
-    fi
+    remove_target "$UHOME/.gemini-gui-storage.json"
 done
 
-# Remover armazenamento da workspace
+# Remover armazenamento local da workspace (se executado na raiz)
 remove_target ".gemini-gui-storage.json"
 remove_target ".gemini"
 remove_target "dist-ubuntu"

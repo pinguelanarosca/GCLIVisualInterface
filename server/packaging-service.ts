@@ -191,11 +191,16 @@ echo "=================================================================="
 echo "   INSTALADOR / ATUALIZADOR OFICIAL - GCLI VISUAL INTERFACE       "
 echo "=================================================================="
 
+# Verificação de privilégios root/sudo para instalação em diretórios de sistema
 if [ "$EUID" -ne 0 ]; then
     echo "ERRO: O instalador precisa de privilégios de administrador para instalar em $INSTALL_DIR."
     echo "Por favor, execute: sudo ./install.sh"
     exit 1
 fi
+
+echo "Verificando e encerrando instâncias ativas do gemini-gui..."
+pkill -f "dist/server.cjs" || true
+pkill -f "gemini-gui" || true
 
 echo "[1/6] Verificando dependências do sistema (git, node, npm)..."
 if ! command -v git &> /dev/null; then
@@ -229,18 +234,39 @@ echo "   Data:     $COMMIT_DATE"
 echo "   Mensagem: $COMMIT_MSG"
 echo "------------------------------------------------------------------"
 
-echo "[3/6] Instalando arquivos da aplicação em $INSTALL_DIR..."
+echo "[3/6] Removendo instalação e launchers anteriores para garantir idempotência limpa..."
+rm -rf "$INSTALL_DIR"
+rm -f "/usr/local/bin/gemini-gui" "/usr/bin/gemini-gui" "/usr/share/applications/gemini-gui.desktop"
+
+# Obter diretórios Home relevantes para limpar o estado antigo EXCLUSIVO da GUI
+TARGET_USER_HOME="\${HOME:-/root}"
+USER_HOMES=("$TARGET_USER_HOME")
+if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    SUDO_HOME=$(eval echo "~\$SUDO_USER" 2>/dev/null || true)
+    if [ -n "$SUDO_HOME" ]; then
+        USER_HOMES+=("$SUDO_HOME")
+    fi
+fi
+
+for UHOME in "\${USER_HOMES[@]}"; do
+    if [ -n "$UHOME" ]; then
+        rm -rf "$UHOME/.local/share/gemini-gui"
+        rm -f "$UHOME/.gemini-gui-storage.json" 2>/dev/null || true
+    fi
+done
+
+echo "[4/6] Instalando arquivos da aplicação em $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 cp -rf "$TEMP_DIR"/* "$INSTALL_DIR/"
 cp -rf "$TEMP_DIR"/.* "$INSTALL_DIR/" 2>/dev/null || true
 
 cd "$INSTALL_DIR"
 
-echo "[4/6] Instalando dependências npm e compilando aplicação..."
+echo "[5/6] Instalando dependências npm e compilando aplicação..."
 npm install --no-audit --no-fund
 npm run build
 
-echo "[5/6] Preparando executáveis, atalhos do sistema e permissões..."
+echo "[6/6] Preparando executáveis, atalhos do sistema e permissões..."
 mkdir -p /usr/local/bin /usr/bin /usr/share/applications /etc/gemini-cli/policies
 
 cat << 'EOF' > /usr/local/bin/gemini-gui
@@ -271,6 +297,7 @@ EOF
 chmod +x /usr/local/bin/gemini-gui
 ln -sf /usr/local/bin/gemini-gui /usr/bin/gemini-gui 2>/dev/null || true
 
+# Criar atalho no Menu de Aplicativos
 cat << 'EOF' > /usr/share/applications/gemini-gui.desktop
 [Desktop Entry]
 Name=GCLI Visual Interface
@@ -286,7 +313,7 @@ EOF
 chmod 644 /usr/share/applications/gemini-gui.desktop
 update-desktop-database 2>/dev/null || true
 
-echo "[6/6] Limpando arquivos temporários do instalador..."
+# Limpando arquivos temporários do instalador
 rm -rf "$TEMP_DIR"
 
 echo "=================================================================="
@@ -324,6 +351,10 @@ remove_target() {
     fi
 }
 
+echo "Verificando e encerrando instâncias ativas do gemini-gui..."
+pkill -f "dist/server.cjs" || true
+pkill -f "gemini-gui" || true
+
 echo "[1/4] Removendo binários, executáveis e atalhos do sistema..."
 remove_target "/opt/gemini-gui"
 remove_target "/usr/local/bin/gemini-gui"
@@ -336,7 +367,7 @@ remove_target "/etc/gemini-cli/policies/deny-google-search.toml"
 rmdir /etc/gemini-cli/policies 2>/dev/null || true
 rmdir /etc/gemini-cli 2>/dev/null || true
 
-echo "[3/4] Removendo dados, configurações, histórico, logs e agentes da aplicação..."
+echo "[3/4] Removendo dados e configurações exclusivos da GUI..."
 TARGET_USER_HOME="\${HOME:-/root}"
 USER_HOMES=("$TARGET_USER_HOME")
 
@@ -347,20 +378,13 @@ if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
     fi
 fi
 
+# Remover em todos os diretórios HOME relevantes exclusivamente o estado da GUI
 for UHOME in "\${USER_HOMES[@]}"; do
-    if [ -d "$UHOME/.gemini" ]; then
-        remove_target "$UHOME/.gemini/history"
-        remove_target "$UHOME/.gemini/tmp"
-        remove_target "$UHOME/.gemini/agents"
-        remove_target "$UHOME/.gemini/projects.json"
-        remove_target "$UHOME/.gemini/projects.json.lock"
-        remove_target "$UHOME/.gemini/policies/deny-google-search.toml"
-        remove_target "$UHOME/.gemini/settings.json"
-        rmdir "$UHOME/.gemini/policies" 2>/dev/null || true
-        rmdir "$UHOME/.gemini" 2>/dev/null || true
-    fi
+    remove_target "\$UHOME/.local/share/gemini-gui"
+    remove_target "\$UHOME/.gemini-gui-storage.json"
 done
 
+# Remover armazenamento local da workspace (se executado na raiz)
 remove_target ".gemini-gui-storage.json"
 remove_target ".gemini"
 remove_target "dist-ubuntu"

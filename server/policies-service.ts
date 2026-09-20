@@ -5,7 +5,7 @@ import { PolicyConfig } from '../src/types.js';
 import { getGuiDataDir } from './paths-service.js';
 
 export function getUserPoliciesDirectory(): string {
-  return path.join(os.homedir(), '.gemini', 'policies');
+  return path.join(getGuiDataDir(), '.gemini', 'policies');
 }
 
 export function getPoliciesDirectory(targetDir?: string): string {
@@ -28,7 +28,6 @@ modes = ["default", "autoEdit", "yolo", "plan"]
 export function ensureDefaultUserPolicies(): void {
   const dirs = [
     '/etc/gemini-cli/policies',
-    getUserPoliciesDirectory(),
     getPoliciesDirectory(),
   ];
 
@@ -49,10 +48,10 @@ export function ensureDefaultUserPolicies(): void {
 export function loadPolicies(targetDir?: string): PolicyConfig[] {
   ensureDefaultUserPolicies();
 
-  const userDir = getUserPoliciesDirectory();
   const wsDir = getPoliciesDirectory(targetDir);
+  const systemDir = '/etc/gemini-cli/policies';
 
-  const policyDirs = Array.from(new Set([userDir, wsDir]));
+  const policyDirs = Array.from(new Set([systemDir, wsDir]));
   const loadedMap = new Map<string, PolicyConfig>();
 
   for (const pDir of policyDirs) {
@@ -88,7 +87,6 @@ export function syncPoliciesToSettings(targetDir?: string): void {
     ensureDefaultUserPolicies();
 
     const base = targetDir || getGuiDataDir();
-    const userDir = getUserPoliciesDirectory();
     const wsDir = path.join(base, '.gemini', 'policies');
 
     if (!fs.existsSync(wsDir)) {
@@ -106,7 +104,7 @@ export function syncPoliciesToSettings(targetDir?: string): void {
     }
 
     const systemDir = '/etc/gemini-cli/policies';
-    const allDirs = Array.from(new Set([systemDir, userDir, wsDir]));
+    const allDirs = Array.from(new Set([systemDir, wsDir]));
     const allPaths: string[] = [];
 
     for (const d of allDirs) {
@@ -120,20 +118,6 @@ export function syncPoliciesToSettings(targetDir?: string): void {
 
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
 
-    // Sincronizar também no ~/.gemini/settings.json
-    const globalSettingsPath = path.join(os.homedir(), '.gemini', 'settings.json');
-    let globalSettings: any = {};
-    if (fs.existsSync(globalSettingsPath)) {
-      try {
-        globalSettings = JSON.parse(fs.readFileSync(globalSettingsPath, 'utf8'));
-      } catch {
-        globalSettings = {};
-      }
-    }
-    globalSettings.policyPaths = allPaths;
-    globalSettings.adminPolicyPaths = allPaths;
-    fs.writeFileSync(globalSettingsPath, JSON.stringify(globalSettings, null, 2), 'utf8');
-
   } catch (err) {
     console.error('Erro ao sincronizar políticas no settings.json:', err);
   }
@@ -145,12 +129,6 @@ export function savePolicy(filename: string, content: string, targetDir?: string
     if (!finalFilename.endsWith('.toml')) {
       finalFilename += '.toml';
     }
-
-    const userDir = getUserPoliciesDirectory();
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
-    }
-    fs.writeFileSync(path.join(userDir, finalFilename), content, 'utf8');
 
     const wsDir = getPoliciesDirectory(targetDir);
     if (!fs.existsSync(wsDir)) {
@@ -168,12 +146,6 @@ export function savePolicy(filename: string, content: string, targetDir?: string
 
 export function deletePolicy(filename: string, targetDir?: string): boolean {
   try {
-    const userDir = getUserPoliciesDirectory();
-    const userPath = path.join(userDir, filename);
-    if (fs.existsSync(userPath)) {
-      fs.unlinkSync(userPath);
-    }
-
     const wsDir = getPoliciesDirectory(targetDir);
     const wsPath = path.join(wsDir, filename);
     if (fs.existsSync(wsPath)) {
@@ -193,13 +165,6 @@ export function renamePolicy(oldFilename: string, newFilename: string, targetDir
     let finalNewFilename = newFilename;
     if (!finalNewFilename.endsWith('.toml')) {
       finalNewFilename += '.toml';
-    }
-
-    const userDir = getUserPoliciesDirectory();
-    const oldUserPath = path.join(userDir, oldFilename);
-    const newUserPath = path.join(userDir, finalNewFilename);
-    if (fs.existsSync(oldUserPath)) {
-      fs.renameSync(oldUserPath, newUserPath);
     }
 
     const wsDir = getPoliciesDirectory(targetDir);
