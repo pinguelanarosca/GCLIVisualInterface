@@ -228,24 +228,6 @@ priority = 90
     const cleanKey = apiKey.trim();
     process.env.GEMINI_API_KEY = cleanKey;
 
-    try {
-      const envFile = path.join(process.cwd(), '.env');
-      let content = '';
-      if (fs.existsSync(envFile)) {
-        content = fs.readFileSync(envFile, 'utf-8');
-        if (/GEMINI_API_KEY=/.test(content)) {
-          content = content.replace(/GEMINI_API_KEY=.*(\r?\n|$)/g, `GEMINI_API_KEY=${cleanKey}\n`);
-        } else {
-          content += `\nGEMINI_API_KEY=${cleanKey}\n`;
-        }
-      } else {
-        content = `GEMINI_API_KEY=${cleanKey}\n`;
-      }
-      fs.writeFileSync(envFile, content);
-    } catch (err: any) {
-      console.warn('Não foi possível gravar no .env:', err.message);
-    }
-
     res.json({ success: true, authConfigured: true });
   });
 
