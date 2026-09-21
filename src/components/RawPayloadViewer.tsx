@@ -41,7 +41,56 @@ export const RawPayloadViewer: React.FC<RawPayloadViewerProps> = ({ data, isUser
   const finalApiJsonString = JSON.stringify(data.finalApiRequest, null, 2);
 
   const handleCopy = (text: string, section?: string) => {
-    navigator.clipboard.writeText(text);
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(text)
+          .then(() => {
+            showFeedback(section);
+          })
+          .catch((err) => {
+            console.warn('Falha ao usar navigator.clipboard, tentando fallback...', err);
+            fallbackCopy(text, section);
+          });
+      } else {
+        fallbackCopy(text, section);
+      }
+    } catch (err) {
+      console.warn('Erro geral ao copiar, tentando fallback...', err);
+      fallbackCopy(text, section);
+    }
+  };
+
+  const fallbackCopy = (text: string, section?: string) => {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.fontSize = '12pt';
+      textarea.style.position = 'fixed';
+      textarea.style.top = '0';
+      textarea.style.left = '0';
+      textarea.style.width = '2em';
+      textarea.style.height = '2em';
+      textarea.style.padding = '0';
+      textarea.style.border = 'none';
+      textarea.style.outline = 'none';
+      textarea.style.boxShadow = 'none';
+      textarea.style.background = 'transparent';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const success = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (success) {
+        showFeedback(section);
+      } else {
+        console.error('Falha no fallback de copia com execCommand.');
+      }
+    } catch (err) {
+      console.error('Erro no fallback de copia:', err);
+    }
+  };
+
+  const showFeedback = (section?: string) => {
     if (section) {
       setCopiedSection(section);
       setTimeout(() => setCopiedSection(null), 2000);

@@ -83,7 +83,7 @@ export function getRawInspectionData(
         role: 'user',
         parts: [
           {
-            text: inputData.fullInjectedPrompt || msg.content,
+            text: inputData.promptText || msg.content,
           },
         ],
       },

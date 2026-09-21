@@ -56,23 +56,6 @@ echo "[3/6] Removendo instalação e launchers anteriores para garantir idempot�
 rm -rf "$INSTALL_DIR"
 rm -f "/usr/local/bin/gemini-gui" "/usr/bin/gemini-gui" "/usr/share/applications/gemini-gui.desktop"
 
-# Obter diretórios Home relevantes para limpar o estado antigo EXCLUSIVO da GUI
-TARGET_USER_HOME="${HOME:-/root}"
-USER_HOMES=("$TARGET_USER_HOME")
-if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
-    SUDO_HOME=$(eval echo "~$SUDO_USER" 2>/dev/null || true)
-    if [ -n "$SUDO_HOME" ]; then
-        USER_HOMES+=("$SUDO_HOME")
-    fi
-fi
-
-for UHOME in "${USER_HOMES[@]}"; do
-    if [ -n "$UHOME" ]; then
-        rm -rf "$UHOME/.local/share/gemini-gui"
-        rm -f "$UHOME/.gemini-gui-storage.json" 2>/dev/null || true
-    fi
-done
-
 echo "[4/6] Instalando arquivos da aplicação em $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 cp -rf "$TEMP_DIR"/* "$INSTALL_DIR/"
@@ -164,6 +147,12 @@ EOF
 
 chmod 644 /usr/share/applications/gemini-gui.desktop
 update-desktop-database 2>/dev/null || true
+
+# Ajustar permissões para que arquivos instalados não dependam de escrita pelo usuário comum
+chown -R root:root "$INSTALL_DIR" 2>/dev/null || true
+find "$INSTALL_DIR" -type d -exec chmod 755 {} \;
+find "$INSTALL_DIR" -type f -exec chmod 644 {} \;
+find "$INSTALL_DIR/node_modules/.bin" -type f -exec chmod 755 {} \; 2>/dev/null || true
 
 # Limpando arquivos temporários do instalador
 rm -rf "$TEMP_DIR"

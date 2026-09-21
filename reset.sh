@@ -26,10 +26,7 @@ for UHOME in "${USER_HOMES[@]}"; do
     fi
 done
 
-# 2. Remover diretório local da workspace .gemini/
-rm -rf .gemini/
-
-# 3. Remover arquivos temporários de log e empacotamento
+# 2. Remover arquivos temporários de log e empacotamento
 rm -f cli-debug.log
 rm -f /tmp/gemini-gui-*.log
 rm -f /tmp/gemini-client-error-*.json

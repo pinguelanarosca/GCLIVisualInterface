@@ -52,7 +52,6 @@ done
 
 # Remover armazenamento local da workspace (se executado na raiz)
 remove_target ".gemini-gui-storage.json"
-remove_target ".gemini"
 remove_target "dist-ubuntu"
 
 echo "[3/3] Removendo logs temporários..."
