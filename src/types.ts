@@ -8,11 +8,6 @@ export interface CliStatus {
   available: boolean;
   version: string;
   cliPath: string;
-  localCliPath?: string;
-  localVersion?: string;
-  globalCliPath?: string;
-  globalVersion?: string;
-  globalUpdateNotice?: string;
   connectionState: 'connected' | 'error' | 'not_detected';
   authConfigured: boolean;
   maskedApiKey?: string;
@@ -32,22 +27,31 @@ export interface AgentConfig {
   displayName: string;
   role: string;
   model: string;
-  backupAgentId?: string;
   description: string;
-  baseInstructions?: string;
   systemInstructions: string;
+  baseInstructions?: string;
   overrideBasePrompt?: boolean;
-  enabled: boolean;
-  kind: 'local' | 'remote';
-  tools: string[];
-  temperature?: number;
   topP?: number;
   topK?: number;
   maxOutputTokens?: number;
   thinking?: boolean;
-  conceptualProfile?: string;
+  enabled: boolean;
+  kind: 'local' | 'remote';
+  tools: string[];
+  temperature?: number;
   maxTurns?: number;
   statusGrade: StatusGrade;
+}
+
+export interface PolicyConfig {
+  id?: string;
+  name?: string;
+  filename: string;
+  description?: string;
+  content: string;
+  enabled?: boolean;
+  priority?: number;
+  statusGrade?: StatusGrade;
 }
 
 export interface SkillConfig {
@@ -66,20 +70,10 @@ export interface CommandConfig {
   statusGrade: StatusGrade;
 }
 
-export interface PolicyConfig {
-  filename: string;
-  content: string;
-}
-
 export interface McpConfig {
   name: string;
-  command?: string;
-  args?: string[];
-  httpUrl?: string;
-  url?: string;
-  type?: string;
-  trust?: boolean;
-  headers?: Record<string, string>;
+  command: string;
+  args: string[];
   env?: Record<string, string>;
   enabled: boolean;
   status: 'connected' | 'stopped' | 'error' | 'unknown';
@@ -123,39 +117,6 @@ export interface ToolCallStep {
   error?: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'requires_approval';
   timestamp: string;
-  description?: string;
-  schema?: any;
-  componentRegister?: string;
-  componentExecutor?: string;
-  origin?: string;
-  wrapperRelation?: string;
-}
-
-export interface FinalApiRequest {
-  model: string;
-  contents: Array<{ role: string; parts: Array<{ text?: string; [key: string]: any }> }>;
-  systemInstruction?: { parts: Array<{ text: string }> } | string | null;
-  generationConfig: {
-    temperature?: number;
-    topP?: number;
-    topK?: number;
-    maxOutputTokens?: number;
-    thinkingConfig?: { includeThoughts: boolean };
-    [key: string]: any;
-  };
-  tools?: any[];
-  safetySettings?: any[];
-  [key: string]: any;
-}
-
-export interface ParameterOrigin {
-  value: any;
-  source: string;
-  category?: string;
-}
-
-export interface ParameterOrigins {
-  [paramName: string]: ParameterOrigin;
 }
 
 export interface ChatMessage {
@@ -170,39 +131,46 @@ export interface ChatMessage {
   error?: string;
   audioUrl?: string;
   isNarrating?: boolean;
-  finalApiRequest?: FinalApiRequest;
-  parameterOrigins?: ParameterOrigins;
-  rawPayloadSent?: {
-    cliExecutable?: string;
-    model?: string;
-    agentName?: string;
-    approvalMode?: string;
-    workDir?: string;
-    authorizedDirs?: string[];
-    systemInstructions?: string;
-    projectContext?: string;
-    promptText?: string;
-    fullInjectedPrompt?: string;
-    skills?: string[];
-    mcpServers?: string[];
-    timestamp?: string;
-    finalApiRequest?: FinalApiRequest;
-    parameterOrigins?: ParameterOrigins;
+  rawPayloadSent?: any;
+  finalApiRequest?: any;
+  parameterOrigins?: any;
+  rawPayloadReceived?: any;
+}
+
+export interface FinalApiRequest {
+  model: string;
+  systemInstruction?: {
+    parts: Array<{ text: string }>;
   };
-  rawPayloadReceived?: {
-    rawEvents?: any[];
-    rawTextStream?: string;
-    tokenStats?: { inputTokens: number; outputTokens: number; totalTokens: number };
-    durationMs?: number;
-    completedAt?: string;
+  contents: Array<{
+    role: string;
+    parts: Array<{ text: string }>;
+  }>;
+  generationConfig?: {
+    temperature?: number;
+    topP?: number;
+    topK?: number;
+    maxOutputTokens?: number;
+    thinking?: boolean;
   };
+  tools?: any[];
+}
+
+export interface ParameterOrigins {
+  model: string;
+  temperature: string;
+  topP: string;
+  topK: string;
+  maxOutputTokens: string;
+  thinking: string;
+  systemInstruction: string;
+  tools: string;
 }
 
 export interface SessionItem {
   id: string;
   title: string;
   projectId?: string;
-  isArchived?: boolean;
   createdAt: string;
   updatedAt: string;
   messageCount: number;
@@ -250,10 +218,6 @@ export interface AudioSettings {
   filterCodeInTts: boolean;
   filterDiffsInTts: boolean;
   micStatus: 'ready' | 'recording' | 'transcribing' | 'error';
-  audioApiKey?: string;
-  audioApiUrl?: string;
-  sttInstructions?: string;
-  ttsInstructions?: string;
   audioModelStatus: {
     sttAvailable: boolean;
     ttsAvailable: boolean;

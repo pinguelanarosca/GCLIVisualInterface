@@ -237,40 +237,52 @@ export async function validateGeminiApiKey(
 
 const knownSessions = new Set<string>();
 
-export function isExistingSession(sessionId?: string): boolean {
+export function isExistingSession(sessionId?: string, workspaceDir?: string): boolean {
   if (!sessionId) return false;
   if (knownSessions.has(sessionId)) return true;
 
   try {
-    const homedir = os.homedir();
-    const geminiTmp = path.join(homedir, '.gemini', 'tmp');
-    if (fs.existsSync(geminiTmp)) {
-      const checkDir = (dir: string, depth = 0): boolean => {
-        if (depth > 5) return false;
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            if (checkDir(fullPath, depth + 1)) return true;
-          } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
-            try {
-              const fd = fs.openSync(fullPath, 'r');
-              const buf = Buffer.alloc(300);
-              const bytesRead = fs.readSync(fd, buf, 0, 300, 0);
-              fs.closeSync(fd);
-              const header = buf.toString('utf8', 0, bytesRead);
-              if (header.includes(`"sessionId":"${sessionId}"`)) {
-                knownSessions.add(sessionId);
-                return true;
-              }
-            } catch {
-              // Ignore reading errors
+    const candidateDirs: string[] = [
+      path.join(getGuiDataDir(), 'tmp'),
+      path.join(getGuiDataDir(), '.gemini', 'tmp'),
+    ];
+
+    if (workspaceDir && workspaceDir !== os.homedir() && workspaceDir !== getGuiDataDir()) {
+      const wsTmp = path.join(workspaceDir, '.gemini', 'tmp');
+      candidateDirs.push(wsTmp);
+    }
+
+    const checkDir = (dir: string, depth = 0): boolean => {
+      if (depth > 5) return false;
+      if (!fs.existsSync(dir)) return false;
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (checkDir(fullPath, depth + 1)) return true;
+        } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+          try {
+            const fd = fs.openSync(fullPath, 'r');
+            const buf = Buffer.alloc(300);
+            const bytesRead = fs.readSync(fd, buf, 0, 300, 0);
+            fs.closeSync(fd);
+            const header = buf.toString('utf8', 0, bytesRead);
+            if (header.includes(`"sessionId":"${sessionId}"`)) {
+              knownSessions.add(sessionId);
+              return true;
             }
+          } catch {
+            // Ignore reading errors
           }
         }
-        return false;
-      };
-      return checkDir(geminiTmp);
+      }
+      return false;
+    };
+
+    for (const cDir of candidateDirs) {
+      if (fs.existsSync(cDir)) {
+        if (checkDir(cDir)) return true;
+      }
     }
   } catch {
     // Ignore error
@@ -542,7 +554,7 @@ export function executeGeminiCli(
     cwd = getGuiDataDir();
   }
 
-  const shouldResume = params.sessionId ? (isExistingSession(params.sessionId) || isRetry) : false;
+  const shouldResume = params.sessionId ? (isExistingSession(params.sessionId, cwd) || isRetry) : false;
   let finalPrompt = params.prompt;
 
   // For new sessions, prepend explicit workspace and directory context so the model knows its working directory

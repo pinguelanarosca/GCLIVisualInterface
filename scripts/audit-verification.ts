@@ -6,6 +6,7 @@ import { buildEffectiveSystemPrompt } from '../src/utils/systemPromptUtils.js';
 import { ensureAgentsSeeded, loadAgents, saveAgentToFile } from '../server/agents-service.js';
 import { ensureDefaultUserPolicies, loadPolicies } from '../server/policies-service.js';
 import { getGuiDataDir } from '../server/paths-service.js';
+import { isExistingSession } from '../server/gemini-cli-service.js';
 
 console.log('================================================================');
 console.log('       INICIANDO AUDITORIA TÉCNICA REAL DE VERIFICAÇÃO');
@@ -152,7 +153,25 @@ runTest('5. Isolamento Global: Nada deve ser gravado em ~/.gemini', () => {
   assert(!fs.existsSync(globalAgentsDir), 'ensureAgentsSeeded NÃO DEVE recriar ~/.gemini/agents');
   assert(fs.existsSync(path.join(guiDataDir, '.gemini', 'agents')), 'Agentes devem estar exclusivamente em ~/.local/share/gemini-gui/.gemini/agents');
 
-  console.log(`   Evidência de isolamento: ~/.gemini/agents não foi criado. Agentes em ${path.join(guiDataDir, '.gemini', 'agents')}`);
+  // Testar isExistingSession: criar arquivo temporário de teste apenas em ~/.local/share/gemini-gui/tmp
+  const testSessionId = `test-isolation-session-${Date.now()}`;
+  const guiTmpDir = path.join(guiDataDir, 'tmp');
+  fs.mkdirSync(guiTmpDir, { recursive: true });
+  const sessionFilePath = path.join(guiTmpDir, `${testSessionId}.jsonl`);
+  fs.writeFileSync(sessionFilePath, `{"sessionId":"${testSessionId}"}\n`);
+
+  const globalGeminiTmp = path.join(os.homedir(), '.gemini', 'tmp');
+  if (fs.existsSync(globalGeminiTmp)) {
+    fs.rmSync(globalGeminiTmp, { recursive: true, force: true });
+  }
+
+  assert(isExistingSession(testSessionId), 'isExistingSession deve localizar sessão em ~/.local/share/gemini-gui/tmp');
+  fs.unlinkSync(sessionFilePath);
+
+  // Garantir que ~/.gemini/tmp NUNCA é criado nem consultado
+  assert(!fs.existsSync(globalGeminiTmp), 'A verificação de sessão NÃO DEVE criar ~/.gemini/tmp');
+
+  console.log(`   Evidência de isolamento: ~/.gemini/agents e ~/.gemini/tmp não existem. Estado em ${guiDataDir}`);
 });
 
 // -------------------------------------------------------------

@@ -24,7 +24,6 @@ const getAppDir = (): string => {
 const fallbackEnvPaths = [
   path.join(process.cwd(), '.env'),
   path.join(getGuiDataDir(), '.env'),
-  path.join(os.homedir(), '.gemini', '.env'),
   '/opt/gemini-gui/.env',
 ];
 for (const envFile of fallbackEnvPaths) {
