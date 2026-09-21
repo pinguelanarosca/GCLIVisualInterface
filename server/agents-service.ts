@@ -4,6 +4,9 @@ import os from 'node:os';
 import { AgentConfig } from '../src/types.js';
 import { sysLog } from './logger-service.js';
 import { getGuiDataDir } from './paths-service.js';
+import { buildEffectiveSystemPrompt } from '../src/utils/systemPromptUtils.js';
+
+export { buildEffectiveSystemPrompt };
 
 const DEFAULT_AGENTS: AgentConfig[] = [
   {
@@ -176,16 +179,6 @@ export function ensureAgentsSeeded(targetDir?: string): AgentConfig[] {
   const agentsDir = getAgentsDirectory(targetDir);
   if (!fs.existsSync(agentsDir)) {
     fs.mkdirSync(agentsDir, { recursive: true });
-  }
-
-  // Also ensure global ~/.gemini/agents exists if possible
-  try {
-    const globalAgentsDir = path.join(os.homedir(), '.gemini', 'agents');
-    if (!fs.existsSync(globalAgentsDir)) {
-      fs.mkdirSync(globalAgentsDir, { recursive: true });
-    }
-  } catch {
-    // Ignore permissions in restricted containers
   }
 
   // Run migration on any existing agent markdown files to ensure strict schema compliance
@@ -391,9 +384,11 @@ export function saveAgentToFile(agent: AgentConfig, targetDir?: string) {
     fs.mkdirSync(agentsDir, { recursive: true });
   }
 
-  const effectivePrompt = agent.overrideBasePrompt
-    ? agent.systemInstructions
-    : (agent.baseInstructions ? `${agent.baseInstructions}\n\n${agent.systemInstructions}` : agent.systemInstructions);
+  const effectivePrompt = buildEffectiveSystemPrompt(
+    agent.baseInstructions,
+    agent.systemInstructions,
+    agent.overrideBasePrompt
+  );
 
   // Schema nativo do Gemini CLI: name, model, description, kind, tools, temperature, max_turns
   const fmLines = [
@@ -496,6 +491,22 @@ function parseAgentMarkdown(content: string, fallbackName: string, metadata: any
     }
   }
 
+  const hasBaseMeta = typeof metadata.baseInstructions === 'string';
+  const hasSysMeta = typeof metadata.systemInstructions === 'string';
+
+  const baseInstructions = hasBaseMeta
+    ? metadata.baseInstructions
+    : (metadata.overrideBasePrompt ? '' : body);
+
+  let systemInstructions = hasSysMeta
+    ? metadata.systemInstructions
+    : (metadata.overrideBasePrompt ? body : '');
+
+  // Deduplicação defensiva na origem: se o override for idêntico às instruções base, limpar override
+  if (systemInstructions && baseInstructions && systemInstructions.trim() === baseInstructions.trim()) {
+    systemInstructions = '';
+  }
+
   return {
     id: name,
     name,
@@ -504,8 +515,8 @@ function parseAgentMarkdown(content: string, fallbackName: string, metadata: any
     model: fields['model'] || 'gemini-3.5-flash-lite',
     backupAgentId: metadata.backupAgentId || fields['backup_agent'] || fields['backup_agent_id'] || undefined,
     description: fields['description'] || '',
-    baseInstructions: metadata.baseInstructions || '',
-    systemInstructions: metadata.systemInstructions || body,
+    baseInstructions,
+    systemInstructions,
     overrideBasePrompt: metadata.overrideBasePrompt === true,
     enabled: metadata.enabled !== false,
     kind: (metadata.kind as any) || 'local',

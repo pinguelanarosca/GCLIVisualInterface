@@ -28,6 +28,7 @@ import {
   AudioSettings,
 } from './types.js';
 import { DEFAULT_AGENTS } from './constants/defaultAgents.js';
+import { buildEffectiveSystemPrompt } from './utils/systemPromptUtils.js';
 
 export function App() {
   // Theme
@@ -248,6 +249,11 @@ export function App() {
 
     const startTime = Date.now();
     const workDir = activeProject?.associatedDirs[0] || authorizedDirs[0]?.path || '/workspace';
+    const effectiveSysInst = buildEffectiveSystemPrompt(
+      currentAgent?.baseInstructions,
+      currentAgent?.systemInstructions,
+      currentAgent?.overrideBasePrompt
+    );
     const rawPayloadSent = {
       cliExecutable: cliStatus?.cliPath || 'gemini',
       model: currentAgent?.model || 'gemini-3.5-flash-lite',
@@ -255,10 +261,10 @@ export function App() {
       approvalMode,
       workDir,
       authorizedDirs: authorizedDirs.map((d) => d.path),
-      systemInstructions: currentAgent?.systemInstructions,
+      systemInstructions: effectiveSysInst,
       projectContext: activeProject ? `Projeto: ${activeProject.name}` : workDir,
       promptText,
-      fullInjectedPrompt: `[SISTEMA - INSTRUÇÕES DO AGENTE]\n${currentAgent?.systemInstructions || ''}\n\n[CONTEXTO DE TRABALHO]\nWorkDir: ${workDir}\nModo Aprovação: ${approvalMode}\n\n[PROMPT ENVIADO]\n${promptText}`,
+      fullInjectedPrompt: `[SISTEMA - INSTRUÇÕES DO AGENTE]\n${effectiveSysInst}\n\n[CONTEXTO DE TRABALHO]\nWorkDir: ${workDir}\nModo Aprovação: ${approvalMode}\n\n[PROMPT ENVIADO]\n${promptText}`,
       skills: skills.filter((s) => s.enabled).map((s) => s.name),
       mcpServers: mcpServers.filter((m) => m.enabled).map((m) => m.name),
       timestamp: new Date().toISOString(),

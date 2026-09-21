@@ -23,6 +23,7 @@ const getAppDir = (): string => {
 // Attempt to load .env from fallback locations if process.env.GEMINI_API_KEY is not set
 const fallbackEnvPaths = [
   path.join(process.cwd(), '.env'),
+  path.join(getGuiDataDir(), '.env'),
   path.join(os.homedir(), '.gemini', '.env'),
   '/opt/gemini-gui/.env',
 ];

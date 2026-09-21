@@ -50,27 +50,68 @@ export GEMINI_GUI_DIR="/opt/gemini-gui"
 export PORT="\${PORT:-3000}"
 export NODE_ENV="production"
 
+# 1. Determinar o diretório home real do usuário
+TARGET_USER="\${SUDO_USER:-\$USER}"
+USER_HOME="\${HOME:-/root}"
+if [ -n "\$SUDO_USER" ] && [ "\$SUDO_USER" != "root" ]; then
+    SUDO_HOME=\$(eval echo "~\$SUDO_USER" 2>/dev/null || true)
+    if [ -n "\$SUDO_HOME" ]; then
+        USER_HOME="\$SUDO_HOME"
+    fi
+fi
+
 if ! command -v node &> /dev/null; then
     echo "ERRO: Node.js é necessário. Instale via 'sudo apt install nodejs npm'"
     exit 1
 fi
 
-# Check if port is already in use
-if command -v lsof &> /dev/null && lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
-    echo "Aviso: A porta $PORT já está em uso."
-    echo "Para liberar, execute: fuser -k $PORT/tcp ou pkill -f 'server.cjs'"
+# 2. Verificar e matar instâncias órfãs antes de iniciar
+pkill -f "dist/server.cjs" 2>/dev/null || true
+
+# 3. Validar a porta 3000 disponível antes de subir o servidor
+if command -v fuser &> /dev/null; then
+    fuser -k "\$PORT/tcp" 2>/dev/null || true
+elif command -v lsof &> /dev/null; then
+    ORPHAN_PID=\$(lsof -Pi :\$PORT -sTCP:LISTEN -t 2>/dev/null || true)
+    if [ -n "\$ORPHAN_PID" ]; then
+        kill -9 "\$ORPHAN_PID" 2>/dev/null || true
+    fi
+fi
+
+# 4. Redirecionar logs para ~/.local/share/gemini-gui/app.log
+LOG_DIR="\$USER_HOME/.local/share/gemini-gui"
+mkdir -p "\$LOG_DIR"
+LOG_FILE="\$LOG_DIR/app.log"
+
+if [ -n "\$SUDO_USER" ] && [ "\$SUDO_USER" != "root" ]; then
+    chown -R "\$SUDO_USER:" "\$LOG_DIR" 2>/dev/null || true
 fi
 
 cd /opt/gemini-gui
-node dist/server.cjs &
-PID=$!
-sleep 1.5
+
+echo "Iniciando Gemini CLI GUI em segundo plano..."
+echo "Porta: \$PORT"
+echo "Logs: \$LOG_FILE"
+
+# 5. Usar nohup e backgrounding correto para desanexar o processo do terminal
+nohup node dist/server.cjs >> "\$LOG_FILE" 2>&1 &
+SERVER_PID=\$!
+disown \$SERVER_PID 2>/dev/null || true
+
+# Aguardar inicialização e verificar saúde da porta
+for i in {1..10}; do
+    if command -v curl &> /dev/null && curl -s -m 1 "http://localhost:\$PORT/api/health" &>/dev/null; then
+        break
+    fi
+    sleep 0.5
+done
 
 if command -v xdg-open &> /dev/null; then
-    xdg-open "http://localhost:\$PORT" &
+    nohup xdg-open "http://localhost:\$PORT" >/dev/null 2>&1 &
 fi
 
-wait $PID
+echo "Gemini CLI GUI iniciado com sucesso em segundo plano (PID \$SERVER_PID). Terminal desanexado."
+exit 0
 `;
 fs.writeFileSync(path.join(binDir, 'gemini-gui'), launcherScript, { mode: 0o755 });
 

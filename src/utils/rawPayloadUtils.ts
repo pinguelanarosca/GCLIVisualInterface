@@ -1,5 +1,6 @@
 import { ChatMessage, AgentConfig, ProjectItem, AuthorizedDir, SkillConfig, McpConfig, FinalApiRequest, ParameterOrigins } from '../types.js';
 import { estimateTokens } from './tokenUtils.js';
+import { buildEffectiveSystemPrompt } from './systemPromptUtils.js';
 
 export interface RawInspectionData {
   finalApiRequest: FinalApiRequest;
@@ -47,7 +48,7 @@ export function getRawInspectionData(
   const workDir = activeProject?.associatedDirs[0] || authorizedDirs[0]?.path || '/workspace';
   const model = msg.model || agent?.model || 'gemini-3.5-flash-lite';
   const agentName = msg.agentName || agent?.displayName || 'Principal Orchestrator';
-  const sysInst = agent?.systemInstructions || 'Você é um assistente de desenvolvimento Gemini CLI operando diretamente no ambiente Ubuntu Linux.';
+  const sysInst = msg.rawPayloadSent?.systemInstructions || (agent ? buildEffectiveSystemPrompt(agent.baseInstructions, agent.systemInstructions, agent.overrideBasePrompt) : '') || 'Você é um assistente de desenvolvimento Gemini CLI operando diretamente no ambiente Ubuntu Linux.';
 
   // If message already has captured raw payload sent
   const inputData = msg.rawPayloadSent || {

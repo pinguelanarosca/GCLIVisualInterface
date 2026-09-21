@@ -7,7 +7,7 @@ import os from 'node:os';
 import { GoogleGenAI } from '@google/genai';
 import { CliStatus } from '../src/types.js';
 import { sysLog } from './logger-service.js';
-import { syncAgentsToSettings, loadAgents } from './agents-service.js';
+import { syncAgentsToSettings, loadAgents, buildEffectiveSystemPrompt } from './agents-service.js';
 import { syncPoliciesToSettings } from './policies-service.js';
 import { getGuiDataDir } from './paths-service.js';
 
@@ -47,20 +47,44 @@ export function queryBinaryVersion(binPath: string): Promise<string> {
       resolve('');
       return;
     }
+
+    // Fast-path: if binPath points to local node_modules gemini, read package.json directly
+    if (binPath.includes('node_modules') && binPath.includes('gemini')) {
+      try {
+        const pkgJsonPath = path.resolve(process.cwd(), 'node_modules', '@google', 'gemini-cli', 'package.json');
+        if (fs.existsSync(pkgJsonPath)) {
+          const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+          if (pkg.version) {
+            resolve(pkg.version);
+            return;
+          }
+        }
+      } catch {}
+    }
+
     try {
       const child = spawn(binPath, ['--version'], {
-        env: { ...process.env, NO_COLOR: '1' },
+        env: { ...process.env, NO_COLOR: '1', GEMINI_CLI_NO_RELAUNCH: '1' },
       });
       let stdout = '';
+      const timer = setTimeout(() => {
+        try { child.kill(); } catch {}
+        resolve(stdout.trim() || '');
+      }, 3000);
+
       child.stdout?.on('data', (d) => { stdout += d.toString(); });
       child.on('close', (code) => {
+        clearTimeout(timer);
         if (code === 0 && stdout.trim()) {
           resolve(stdout.trim());
         } else {
           resolve('');
         }
       });
-      child.on('error', () => resolve(''));
+      child.on('error', () => {
+        clearTimeout(timer);
+        resolve('');
+      });
     } catch {
       resolve('');
     }
@@ -573,21 +597,25 @@ export function executeGeminiCli(
     '--skip-trust',
   ];
 
-  // Carregar políticas do usuário (leitura de segurança externa opcional se houver), da GUI e do workspace
-  const userPoliciesDir = path.join(os.homedir(), '.gemini', 'policies');
+  // Carregar políticas de segurança da GUI (onde deny-google-search.toml reside no escopo da GUI)
   const guiPoliciesDir = path.join(getGuiDataDir(), '.gemini', 'policies');
-  const policyDirs = Array.from(new Set([
-    userPoliciesDir,
-    guiPoliciesDir,
-    path.join(cwd, '.gemini', 'policies'),
-  ]));
+  const policyDirs: string[] = [];
+  if (fs.existsSync(guiPoliciesDir)) {
+    policyDirs.push(guiPoliciesDir);
+  }
+
+  // Workspace .gemini/policies só pode ser usado quando explicitamente presente e fora do escopo global
+  if (cwd && cwd !== os.homedir() && cwd !== getGuiDataDir()) {
+    const wsPolicyDir = path.join(cwd, '.gemini', 'policies');
+    if (fs.existsSync(wsPolicyDir)) {
+      policyDirs.push(wsPolicyDir);
+    }
+  }
 
   // Adicionar diretórios de políticas
   for (const pDir of policyDirs) {
-    if (fs.existsSync(pDir)) {
-      args.push('--policy', pDir);
-      args.push('--admin-policy', pDir);
-    }
+    args.push('--policy', pDir);
+    args.push('--admin-policy', pDir);
   }
 
   // Política base de ambiente web-preview (prioridade 5 para permitir tools básicas sem bloquear regras do usuário)
@@ -625,19 +653,21 @@ export function executeGeminiCli(
     cliPath = getLocalCliPath() || getGlobalCliPath() || 'gemini';
   }
 
-  // Se houver instruções de sistema customizadas, aplicar via GEMINI_SYSTEM_MD
+  // Construir o prompt de sistema efetivo preservando a arquitetura base + override sem duplicidade
   let systemPromptFile: string | null = null;
-  const effectiveSystemPrompt = params.overrideBasePrompt
-    ? (params.systemInstructions || '')
-    : [params.baseInstructions, params.systemInstructions].filter(Boolean).join('\n\n');
+  const effectiveSystemPrompt = buildEffectiveSystemPrompt(
+    params.baseInstructions,
+    params.systemInstructions,
+    params.overrideBasePrompt
+  );
 
   if (effectiveSystemPrompt && effectiveSystemPrompt.trim()) {
     try {
-      const systemPromptDir = path.join(cwd, '.gemini');
+      const systemPromptDir = path.join(getGuiDataDir(), 'tmp');
       if (!fs.existsSync(systemPromptDir)) {
         fs.mkdirSync(systemPromptDir, { recursive: true });
       }
-      systemPromptFile = path.join(systemPromptDir, `active-system-${Date.now()}.md`);
+      systemPromptFile = path.join(systemPromptDir, `active-system-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.md`);
       fs.writeFileSync(systemPromptFile, effectiveSystemPrompt.trim(), 'utf8');
     } catch (err) {
       sysLog.warn('CLI', `Não foi possível gerar system prompt customizado: ${err}`);
@@ -651,6 +681,7 @@ export function executeGeminiCli(
     GEMINI_CLI_TRUST_WORKSPACE: 'true',
     GEMINI_MAX_RETRIES: '0',
     MAX_RETRIES: '0',
+    GEMINI_CLI_NO_RELAUNCH: '1',
   };
 
   if (systemPromptFile) {
@@ -1149,6 +1180,14 @@ Você atingiu o limite de requisições.
       sysLog.error('CLI', `Gemini CLI finalizado com erro (código: ${code}): ${finalMessage.substring(0, 100)}`, { exitCode: code, stderr: stderrText.substring(0, 200) });
     } else {
       sysLog.success('CLI', `Execução do Gemini CLI concluída com sucesso (código 0).`, { sessionId: params.sessionId });
+    }
+
+    if (systemPromptFile && fs.existsSync(systemPromptFile)) {
+      try {
+        fs.unlinkSync(systemPromptFile);
+      } catch {
+        // Ignorar se já removido
+      }
     }
 
     activeChildProcess = null;

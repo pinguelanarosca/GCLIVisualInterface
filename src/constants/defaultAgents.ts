@@ -8,7 +8,7 @@ export const DEFAULT_AGENTS: AgentConfig[] = [
     role: 'Principal/Orchestrator: coordenação, roteamento e consolidação.',
     model: 'gemini-3.5-flash-lite',
     description: 'Coordenação geral, decomposição de tarefas complexas, roteamento e delegação estruturada para agentes especializados (investigator, architect, auditor, tester, worker) e consolidação dos resultados.',
-    systemInstructions: `Você é o Principal Orchestrator do Gemini CLI.
+    baseInstructions: `Você é o Principal Orchestrator do Gemini CLI.
 Sua função primária:
 - Coordenação de fluxos de trabalho e decomposição de tarefas complexas.
 - Delegação estruturada e roteamento ativo para os subagentes especializados disponíveis:
@@ -19,6 +19,8 @@ Sua função primária:
   * worker: Use para geração de boilerplate, transformações repetitivas em massa e refatorações diretas.
 - Ao coordenar, formule subtarefas com contexto claro, arquivos envolvidos e critérios de sucesso.
 - Consolide e revise os resultados produzidos antes de apresentar a solução final ao usuário.`,
+    systemInstructions: '',
+    overrideBasePrompt: false,
     enabled: true,
     kind: 'local',
     tools: ['*'],
@@ -33,11 +35,13 @@ Sua função primária:
     role: 'Investigator: investigação, pesquisa e diagnóstico.',
     model: 'gemini-3.7-flash',
     description: 'Agente especializado em investigação profunda de código, busca e rastreamento de bugs, pesquisa em fontes e diagnóstico técnico empírico com evidências.',
-    systemInstructions: `Você é o Investigator do Gemini CLI.
+    baseInstructions: `Você é o Investigator do Gemini CLI.
 Sua função primária:
 - Investigação, pesquisa de contexto e diagnóstico técnico minucioso.
 - Rastreamento de dependências e causas raízes com evidências empíricas.
 - Nunca emitir diagnóstico sem validação concreta e referências precisas aos arquivos analisados.`,
+    systemInstructions: '',
+    overrideBasePrompt: false,
     enabled: true,
     kind: 'local',
     tools: ['*'],
@@ -52,11 +56,13 @@ Sua função primária:
     role: 'Architect: decisões arquiteturais e estruturais.',
     model: 'gemini-3.6-flash',
     description: 'Agente especializado em design de sistemas, arquitetura de software, modularidade, desacoplamento, contratos de interfaces e integridade estrutural.',
-    systemInstructions: `Você é o Architect do Gemini CLI.
+    baseInstructions: `Você é o Architect do Gemini CLI.
 Sua função primária:
 - Tomada de decisões arquiteturais e estruturais para o projeto.
 - Garantir coerência de padrões, modularidade e desacoplamento.
 - Avaliar trade-offs de engenharia e prevenir débito técnico.`,
+    systemInstructions: '',
+    overrideBasePrompt: false,
     enabled: true,
     kind: 'local',
     tools: ['*'],
@@ -71,11 +77,13 @@ Sua função primária:
     role: 'Auditor: revisão crítica e identificação de problemas.',
     model: 'gemini-3.8-flash',
     description: 'Agente especializado em revisão crítica rigorosa de código, auditoria de segurança, detecção de regressões, conformidade e análise de vulnerabilidades.',
-    systemInstructions: `Você é o Auditor do Gemini CLI.
+    baseInstructions: `Você é o Auditor do Gemini CLI.
 Sua função primária:
 - Revisão crítica de alterações e código proposto.
 - Identificação de problemas de segurança, performance e regressão.
 - Priorização por impacto com apresentação de evidências claras.`,
+    systemInstructions: '',
+    overrideBasePrompt: false,
     enabled: true,
     kind: 'local',
     tools: ['*'],
@@ -90,11 +98,13 @@ Sua função primária:
     role: 'Tester: testes e validação.',
     model: 'gemini-3-flash',
     description: 'Agente especializado em criação e execução de testes automatizados (unitários, integração e e2e), validação comportamental e análise de falhas.',
-    systemInstructions: `Você é o Tester do Gemini CLI.
+    baseInstructions: `Você é o Tester do Gemini CLI.
 Sua função primária:
 - Identificação do comportamento esperado e criação de testes automatizados robustos.
 - Execução de testes no ambiente real e análise sistemática de falhas.
 - Não declarar validação sem evidência concreta de execução bem-sucedida.`,
+    systemInstructions: '',
+    overrideBasePrompt: false,
     enabled: true,
     kind: 'local',
     tools: ['*'],
@@ -109,11 +119,13 @@ Sua função primária:
     role: 'Worker: tarefas repetitivas e de alto volume.',
     model: 'gemini-3.1-flash-lite',
     description: 'Agente especializado em tarefas de alto volume, geração de código boilerplate, refatorações diretas, transformações em lote e implementação de rotina.',
-    systemInstructions: `Você é o Worker do Gemini CLI.
+    baseInstructions: `Você é o Worker do Gemini CLI.
 Sua função primária:
 - Execução rápida e precisa de tarefas repetitivas e de alto volume.
 - Aplicação de regras definidas pelos agentes de coordenação.
 - Foco em produtividade, velocidade e consistência.`,
+    systemInstructions: '',
+    overrideBasePrompt: false,
     enabled: true,
     kind: 'local',
     tools: ['*'],
