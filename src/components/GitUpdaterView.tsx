@@ -34,8 +34,8 @@ interface GitUpdaterViewProps {
 }
 
 export const GitUpdaterView: React.FC<GitUpdaterViewProps> = ({ onRefreshGlobalStatus }) => {
-  const [repoUrl, setRepoUrl] = useState('https://github.com/pinguelanarosca/GCLIVisualInterface');
-  const [branch, setBranch] = useState('Update');
+  const [repoUrl, setRepoUrl] = useState('https://github.com/pinguelanarosca/CLIgoVisual');
+  const [branch, setBranch] = useState('main');
   const [gitStatus, setGitStatus] = useState<GitAppStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
 
@@ -258,11 +258,11 @@ export const GitUpdaterView: React.FC<GitUpdaterViewProps> = ({ onRefreshGlobalS
   };
 
   const manualCommands = `# 1. Navegar até a pasta da aplicação no Ubuntu:
-cd /opt/gemini-gui || cd ~/GCLIVisualInterface || cd ~/gemini-cli-gui
+cd /opt/gemini-gui || cd ~/CLIgoVisual || cd ~/gemini-cli-gui
 
 # 2. Sincronizar o código com o repositório remoto:
-git fetch origin ${branch || 'Update'}
-git reset --hard origin/${branch || 'Update'}
+git fetch origin ${branch || 'main'}
+git reset --hard origin/${branch || 'main'}
 
 # 3. Atualizar dependências e recompilar a aplicação:
 npm install
@@ -346,7 +346,7 @@ npm start
               type="text"
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
-              placeholder="https://github.com/pinguelanarosca/GCLIVisualInterface"
+              placeholder="https://github.com/pinguelanarosca/CLIgoVisual"
               className="w-full px-3 py-2 text-xs font-mono rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 outline-none focus:border-blue-500 transition"
             />
           </div>

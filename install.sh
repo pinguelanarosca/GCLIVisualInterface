@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-REPO_URL="https://github.com/pinguelanarosca/GCLIVisualInterface"
+REPO_URL="https://github.com/pinguelanarosca/CLIgoVisual"
 INSTALL_DIR="/opt/gemini-gui"
 TEMP_DIR="/tmp/gcli-install-source"
 
@@ -17,8 +17,18 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo "Verificando e encerrando instâncias ativas do gemini-gui..."
-pkill -f "dist/server.cjs" || true
-pkill -f "gemini-gui" || true
+# Encerra processos do servidor compilado ou tsx vinculados a /opt/gemini-gui ou dist/server.cjs
+pkill -f "node.*/opt/gemini-gui" 2>/dev/null || true
+pkill -f "dist/server\.cjs" 2>/dev/null || true
+pkill -f "tsx.*server\.ts" 2>/dev/null || true
+
+# Encerra processos executando especificamente o launcher instalado, sem jamais casar com o script instalador atual
+MY_PID=$$
+for pid in $(pgrep -f "^/bin/bash /usr/(local/)?bin/gemini-gui|^/usr/(local/)?bin/gemini-gui" 2>/dev/null || true); do
+    if [ "$pid" != "$MY_PID" ] && [ "$pid" != "$PPID" ]; then
+        kill "$pid" 2>/dev/null || true
+    fi
+done
 
 echo "[1/6] Verificando dependências do sistema (git, node, npm)..."
 if ! command -v git &> /dev/null; then
@@ -36,9 +46,17 @@ NODE_VER=$(node -v)
 echo "   Node.js versão detectada: $NODE_VER"
 
 echo "[2/6] Baixando a versão mais recente do repositório oficial no GitHub..."
-echo "   Repositório Fonte: $REPO_URL"
-rm -rf "$TEMP_DIR"
-git clone --depth 1 "$REPO_URL" "$TEMP_DIR"
+if [ -n "$GEMINI_GUI_LOCAL_SOURCE" ] && [ -d "$GEMINI_GUI_LOCAL_SOURCE" ]; then
+    echo "   Modo de fonte local ativado: $GEMINI_GUI_LOCAL_SOURCE"
+    rm -rf "$TEMP_DIR"
+    mkdir -p "$TEMP_DIR"
+    cp -rf "$GEMINI_GUI_LOCAL_SOURCE"/* "$TEMP_DIR/"
+    cp -rf "$GEMINI_GUI_LOCAL_SOURCE"/.* "$TEMP_DIR/" 2>/dev/null || true
+else
+    echo "   Repositório Fonte: $REPO_URL (branch: main)"
+    rm -rf "$TEMP_DIR"
+    git clone --depth 1 --branch main "$REPO_URL" "$TEMP_DIR"
+fi
 
 cd "$TEMP_DIR"
 COMMIT_HASH=$(git rev-parse HEAD 2>/dev/null || echo "desconhecido")
@@ -65,7 +83,19 @@ cd "$INSTALL_DIR"
 
 echo "[5/6] Instalando dependências npm e compilando aplicação..."
 npm install --no-audit --no-fund
-npm run build
+echo "   Compilando aplicação (Vite + esbuild)..."
+if ! npm run build; then
+    echo "------------------------------------------------------------------"
+    echo "ERRO CRÍTICO: Falha na compilação da aplicação (npm run build falhou)."
+    echo "A instalação foi cancelada para evitar um estado corrompido."
+    echo "------------------------------------------------------------------"
+    exit 1
+fi
+
+if [ ! -f "$INSTALL_DIR/dist/server.cjs" ]; then
+    echo "ERRO CRÍTICO: dist/server.cjs não foi gerado pelo build."
+    exit 1
+fi
 
 echo "[6/6] Preparando executáveis, atalhos do sistema e permissões..."
 mkdir -p /usr/local/bin /usr/bin /usr/share/applications
@@ -164,3 +194,10 @@ echo "   Commit:      $COMMIT_HASH"
 echo "   Localização: $INSTALL_DIR"
 echo "   Executável:  /usr/local/bin/gemini-gui (comando: gemini-gui)"
 echo "=================================================================="
+
+echo "Iniciando a GCLI Visual Interface em segundo plano com nohup + disown..."
+if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    su - "$SUDO_USER" -c "/usr/local/bin/gemini-gui" 2>/dev/null || /usr/local/bin/gemini-gui
+else
+    /usr/local/bin/gemini-gui
+fi

@@ -183,7 +183,7 @@ wait \$SERVER_PID
   const installScript = `#!/usr/bin/env bash
 set -e
 
-REPO_URL="https://github.com/pinguelanarosca/GCLIVisualInterface"
+REPO_URL="https://github.com/pinguelanarosca/CLIgoVisual"
 INSTALL_DIR="/opt/gemini-gui"
 TEMP_DIR="/tmp/gcli-install-source"
 
@@ -199,8 +199,16 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo "Verificando e encerrando instâncias ativas do gemini-gui..."
-pkill -f "dist/server.cjs" || true
-pkill -f "gemini-gui" || true
+pkill -f "node.*/opt/gemini-gui" 2>/dev/null || true
+pkill -f "dist/server\.cjs" 2>/dev/null || true
+pkill -f "tsx.*server\.ts" 2>/dev/null || true
+
+MY_PID=$$
+for pid in $(pgrep -f "^/bin/bash /usr/(local/)?bin/gemini-gui|^/usr/(local/)?bin/gemini-gui" 2>/dev/null || true); do
+    if [ "$pid" != "$MY_PID" ] && [ "$pid" != "$PPID" ]; then
+        kill "$pid" 2>/dev/null || true
+    fi
+done
 
 echo "[1/6] Verificando dependências do sistema (git, node, npm)..."
 if ! command -v git &> /dev/null; then
@@ -386,8 +394,16 @@ remove_target() {
 }
 
 echo "Verificando e encerrando instâncias ativas do gemini-gui..."
-pkill -f "dist/server.cjs" || true
-pkill -f "gemini-gui" || true
+pkill -f "node.*/opt/gemini-gui" 2>/dev/null || true
+pkill -f "dist/server\.cjs" 2>/dev/null || true
+pkill -f "tsx.*server\.ts" 2>/dev/null || true
+
+MY_PID=$$
+for pid in $(pgrep -f "^/bin/bash /usr/(local/)?bin/gemini-gui|^/usr/(local/)?bin/gemini-gui" 2>/dev/null || true); do
+    if [ "$pid" != "$MY_PID" ] && [ "$pid" != "$PPID" ]; then
+        kill "$pid" 2>/dev/null || true
+    fi
+done
 
 echo "[1/3] Removendo binários, executáveis e atalhos do sistema..."
 remove_target "/opt/gemini-gui"
